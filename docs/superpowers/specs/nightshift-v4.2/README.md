@@ -1,5 +1,13 @@
 # NightShift V4.2 Detailed Design Pack
 
+Status: legacy base pack retained because V4.2.1 still references it where historical inheritance is needed.
+
+Implementation rule:
+
+- do not use this pack as the default implementation target
+- prefer `../README.md` and `../2026-03-27-nightshift-v4.2.1-unified-spec.md`
+- only read this pack when a V4.2.1 document explicitly points back to it
+
 This directory contains the detailed design documents that sit under the unified architecture spec:
 
 - Parent architecture spec:
