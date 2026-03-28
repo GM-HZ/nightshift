@@ -4,7 +4,7 @@ import pytest
 
 from nightshift.product.execution_selection.models import SelectionError
 from nightshift.product.issue_ingestion import GitHubIssue, parse_github_issue_template
-from nightshift.product.splitter.github_publish import publish_proposals, render_github_issue_body
+from nightshift.product.splitter.github_publish import create_github_issue, publish_proposals, render_github_issue_body
 from nightshift.product.splitter.models import ProposalBatch, ProposalReviewStatus, PublishedIssueRef, SplitterProposal
 from nightshift.product.splitter.storage import ProposalStore
 
@@ -116,3 +116,11 @@ def test_publish_proposals_rejects_unapproved_proposal(tmp_path) -> None:
             repo_full_name="GM-HZ/nightshift",
             publisher=lambda *args: PublishedIssueRef(repo_full_name="GM-HZ/nightshift", issue_number=1),
         )
+
+
+def test_create_github_issue_requires_token(monkeypatch) -> None:
+    monkeypatch.delenv("NIGHTSHIFT_GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    with pytest.raises(SelectionError, match="requires NIGHTSHIFT_GITHUB_TOKEN or GITHUB_TOKEN"):
+        create_github_issue("GM-HZ/nightshift", "Add zh-CN README", "body", ("nightshift",))

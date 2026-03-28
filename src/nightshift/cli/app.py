@@ -18,8 +18,15 @@ from nightshift.product.issue_ingestion import (
     parse_github_issue_template,
 )
 from nightshift.product.queue_admission import admit_to_queue
-from nightshift.product.splitter import ProposalStore, publish_proposals, split_requirement_file
-from nightshift.product.splitter.models import PublishedIssueRef
+from nightshift.product.splitter import (
+    ProposalStore,
+    approve_proposals,
+    create_github_issue,
+    publish_proposals,
+    reject_proposals,
+    split_requirement_file,
+    update_proposals,
+)
 from nightshift.registry.issue_registry import IssueRegistry
 from nightshift.reporting.minimal_report import build_minimal_report
 from nightshift.store.state_store import StateStore
@@ -38,10 +45,6 @@ app.add_typer(proposals_app, name="proposals")
 @app.callback(invoke_without_command=True)
 def root() -> None:
     pass
-
-
-def create_github_issue(repo_full_name: str, title: str, body: str, labels: tuple[str, ...]) -> PublishedIssueRef:
-    raise NotImplementedError("GitHub issue creation is not wired yet")
 
 
 def build_run_orchestrator(repo_root: Path, config: object) -> RunOrchestrator:
@@ -153,6 +156,75 @@ def proposals_publish(
 
     for proposal_id, ref in zip(proposal_ids, refs):
         typer.echo(f"published proposal {proposal_id} as {ref.repo_full_name}#{ref.issue_number}")
+
+
+@proposals_app.command("approve")
+def proposals_approve(
+    proposal_ids: list[str] = typer.Argument(...),
+    batch: str = typer.Option(..., "--batch"),
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+) -> None:
+    store = _build_proposal_store(repo)
+    try:
+        updated = approve_proposals(store, batch, proposal_ids)
+    except Exception as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(1) from error
+
+    selected = set(proposal_ids)
+    for proposal in updated.proposals:
+        if proposal.proposal_id in selected:
+            typer.echo(f"approved proposal {proposal.proposal_id}")
+
+
+@proposals_app.command("reject")
+def proposals_reject(
+    proposal_ids: list[str] = typer.Argument(...),
+    batch: str = typer.Option(..., "--batch"),
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+) -> None:
+    store = _build_proposal_store(repo)
+    try:
+        updated = reject_proposals(store, batch, proposal_ids)
+    except Exception as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(1) from error
+
+    selected = set(proposal_ids)
+    for proposal in updated.proposals:
+        if proposal.proposal_id in selected:
+            typer.echo(f"rejected proposal {proposal.proposal_id}")
+
+
+@proposals_app.command("update")
+def proposals_update(
+    proposal_ids: list[str] = typer.Argument(...),
+    batch: str = typer.Option(..., "--batch"),
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    allowed_paths: list[str] = typer.Option([], "--allowed-path"),
+    acceptance_criteria: list[str] = typer.Option([], "--acceptance"),
+    verification_commands: list[str] = typer.Option([], "--verify"),
+    clear_missing_context: bool = typer.Option(False, "--clear-missing-context"),
+) -> None:
+    store = _build_proposal_store(repo)
+    try:
+        updated = update_proposals(
+            store,
+            batch,
+            proposal_ids,
+            allowed_paths=allowed_paths or None,
+            acceptance_criteria=acceptance_criteria or None,
+            verification_commands=verification_commands or None,
+            clear_missing_context=clear_missing_context,
+        )
+    except Exception as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(1) from error
+
+    selected = set(proposal_ids)
+    for proposal in updated.proposals:
+        if proposal.proposal_id in selected:
+            typer.echo(f"updated proposal {proposal.proposal_id}")
 
 
 @app.command("run-one")

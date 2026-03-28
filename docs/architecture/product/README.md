@@ -62,7 +62,7 @@ Current product-slice design docs:
 
 Current product-slice implementation status:
 
-- `split --file`, `proposals show`, and `proposals publish` now exist as the planning-side CLI flow
+- `split --file`, `proposals show`, `proposals update`, `proposals approve`, `proposals reject`, and `proposals publish` now exist as the planning-side CLI flow
 - proposal batches now persist locally with explicit review state
 - approved proposals now render into the same standard NightShift GitHub issue template consumed by ingestion
 - `issue ingest-github` now exists as the first product-layer bridge into the kernel
@@ -72,7 +72,8 @@ Current product-slice implementation status:
 - `queue add` now explicitly admits local issues into the live queue
 - `run --issues` and `run --all` now exist for sequential fail-fast batch execution
 - batch execution currently reuses kernel `run-one` and current queue ordering
-- splitter-driven proposal generation and review/publish workflow now exist in MVP form, though richer review UX and a real GitHub create adapter still remain future work
+- splitter-driven proposal generation and review/publish workflow now exist in MVP form, including a real GitHub create adapter
+- the current remaining gaps are proposal quality, richer editing/review ergonomics, and environment credentials for live GitHub publish
 
 ## Current Next-Step Theme
 

@@ -31,8 +31,9 @@ Current implementation status in this repository:
 - implemented: explicit review state transitions
 - implemented: publish-ready validation
 - implemented: proposal rendering into the standard NightShift GitHub issue template
-- implemented: minimal CLI flow via `split`, `proposals show`, and `proposals publish`
-- not yet implemented: real GitHub issue creation adapter, richer review UX, or high-quality skill-backed decomposition
+- implemented: minimal CLI flow via `split`, `proposals show`, `proposals update`, `proposals approve`, `proposals reject`, and `proposals publish`
+- implemented: real GitHub issue creation adapter
+- not yet implemented: richer review UX or high-quality skill-backed decomposition
 
 This MVP does not cover:
 

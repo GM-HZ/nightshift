@@ -5,7 +5,7 @@ NightShift is an overnight AI coding harness. This repository now contains both 
 ## Current Status
 
 - Current implementation target: `v4.2.1`
-- Current CLI surface: `split`, `proposals show`, `proposals publish`, `run-one`, `run`, `recover`, `report`, `queue status`, `queue show`, `queue add`, `queue reprioritize`, `issue ingest-github`
+- Current CLI surface: `split`, `proposals show`, `proposals update`, `proposals approve`, `proposals reject`, `proposals publish`, `run-one`, `run`, `recover`, `report`, `queue status`, `queue show`, `queue add`, `queue reprioritize`, `issue ingest-github`
 - Current engine adapters: `codex`, `claude`
 - Current scope: single-issue execution flow plus persistence, validation, recovery, and run-scoped reporting
 
@@ -61,7 +61,7 @@ What is intentionally not in the MVP yet:
 
 The current branch is intentionally not a full `v4.2.1` product-complete implementation. These gaps are known and not bugs in the current MVP scope:
 
-- no fully automated end-to-end intake workflow yet: splitter proposal generation and publish flow now exist, but proposal review is still file/CLI-driven and issue creation is still behind a publisher seam
+- no fully automated end-to-end intake workflow yet: splitter proposal generation, review, and publish flow now exist, but proposal editing is still CLI-driven, skill-backed decomposition is still minimal, and real GitHub publish still depends on operator-provided token credentials
 - no daemonized multi-issue overnight control loop yet: `run --issues` and `run --all` now exist, but `run --daemon` and `stop` are not implemented
 - no richer queue approval workflow yet beyond `queue add` and current reprioritization
 - no delivery automation yet: branch handoff, PR opening, review sync, and merge workflows are not wired
