@@ -76,6 +76,12 @@ class IssueRecord(BaseModel):
         if self.delivery_state != DeliveryState.none and not self.accepted_attempt_id:
             raise ValueError("accepted_attempt_id must be set when delivery_state is not none")
 
+        if self.delivery_state != DeliveryState.none and self.issue_state != IssueState.done:
+            raise ValueError("delivery states require issue_state to be done")
+
+        if self.delivery_state != DeliveryState.none and self.attempt_state != AttemptState.accepted:
+            raise ValueError("delivery states require attempt_state to be accepted")
+
         if self.delivery_state in {
             DeliveryState.pr_opened,
             DeliveryState.reviewed,

@@ -651,13 +651,49 @@ def test_issue_record_rejects_non_none_delivery_without_accepted_attempt() -> No
     assert "accepted_attempt_id" in str(exc_info.value)
 
 
-def test_issue_record_rejects_pr_opened_without_delivery_reference() -> None:
+def test_issue_record_rejects_delivery_state_without_done_issue_state() -> None:
     with pytest.raises(ValidationError) as exc_info:
         IssueRecord.model_validate(
             {
                 "issue_id": "ISSUE-1",
                 "issue_state": "draft",
                 "attempt_state": "pending",
+                "delivery_state": "branch_ready",
+                "accepted_attempt_id": "ATT-1",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "delivery states require issue_state to be done" in str(exc_info.value)
+
+
+def test_issue_record_rejects_delivery_state_without_accepted_attempt_state() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "done",
+                "attempt_state": "pending",
+                "delivery_state": "branch_ready",
+                "accepted_attempt_id": "ATT-1",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "attempt_state to be accepted" in str(exc_info.value)
+
+
+def test_issue_record_rejects_pr_opened_without_delivery_reference() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "done",
+                "attempt_state": "accepted",
                 "delivery_state": "pr_opened",
                 "accepted_attempt_id": "ATT-1",
                 "queue_priority": "high",
