@@ -6,19 +6,26 @@ from pydantic import BaseModel, ConfigDict, Field
 class ProjectConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str
+    repo_path: str
+    main_branch: str
 
 
 class RunnerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    engine_policy: str
+    default_engine: str
+    fallback_engine: str | None = None
+    issue_timeout_seconds: int
+    overnight_timeout_seconds: int
 
 
 class ValidationConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
+    static_validation_commands: list[str] = Field(default_factory=list)
+    core_regression_commands: list[str] = Field(default_factory=list)
+    promotion_commands: list[str] = Field(default_factory=list)
 
 
 class TestEditPolicyConfig(BaseModel):
@@ -61,25 +68,39 @@ class IssueDefaultsConfig(BaseModel):
 class RetryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    enabled: bool = True
+    max_retries: int
+    retry_policy: str
+    failure_circuit_breaker: bool
 
 
 class WorkspaceConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    root: str
+    worktree_root: str
+    artifact_root: str
+    cleanup_whitelist: list[str] = Field(default_factory=list)
+
+
+class SeverityThresholdsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    info: str
+    warning: str
+    critical: str
 
 
 class AlertsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    enabled: bool = True
+    enabled_channels: list[str] = Field(default_factory=list)
+    severity_thresholds: SeverityThresholdsConfig
 
 
 class ReportConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    format: str
+    output_directory: str
+    summary_verbosity: str
 
 
 class NightShiftConfig(BaseModel):

@@ -8,11 +8,20 @@ def test_load_config_reads_issue_defaults(tmp_path: Path) -> None:
     config_path.write_text(
         """
 project:
-  name: NightShift
+  repo_path: /workspace/nightshift
+  main_branch: main
 runner:
-  engine_policy: default
+  default_engine: gpt-5
+  fallback_engine: gpt-4.1
+  issue_timeout_seconds: 900
+  overnight_timeout_seconds: 28800
 validation:
-  enabled: true
+  static_validation_commands:
+    - pytest
+  core_regression_commands:
+    - pytest -m core
+  promotion_commands:
+    - pytest -m promotion
 issue_defaults:
   default_priority: high
   default_forbidden_paths:
@@ -30,17 +39,34 @@ issue_defaults:
     command_seconds: 900
     issue_budget_seconds: 7200
 retry:
-  enabled: true
+  max_retries: 3
+  retry_policy: exponential_backoff
+  failure_circuit_breaker: true
 workspace:
-  root: .
+  worktree_root: /workspace/nightshift/.worktrees
+  artifact_root: /workspace/nightshift/.artifacts
+  cleanup_whitelist:
+    - .git
 alerts:
-  enabled: true
+  enabled_channels:
+    - console
+  severity_thresholds:
+    info: info
+    warning: warning
+    critical: critical
 report:
-  format: text
+  output_directory: /workspace/nightshift/.reports
+  summary_verbosity: concise
 """
     )
 
     config = load_config(config_path)
 
+    assert config.project.repo_path == "/workspace/nightshift"
+    assert config.runner.default_engine == "gpt-5"
+    assert config.validation.static_validation_commands == ["pytest"]
     assert config.issue_defaults.default_priority == "high"
     assert config.issue_defaults.default_forbidden_paths == ["secrets"]
+    assert config.workspace.worktree_root == "/workspace/nightshift/.worktrees"
+    assert config.alerts.enabled_channels == ["console"]
+    assert config.report.summary_verbosity == "concise"

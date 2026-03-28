@@ -12,6 +12,7 @@ from nightshift.domain.contracts import (
     VerificationStageContract,
 )
 from nightshift.domain.records import IssueRecord
+from nightshift.domain.records import AttemptRecord
 
 
 def test_issue_contract_rejects_runtime_fields() -> None:
@@ -165,6 +166,35 @@ def test_execution_contract_requires_paths_and_validation() -> None:
     assert contract.kind == "execution"
 
 
+def test_execution_contract_rejects_commands_without_pass_condition() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(
+                issue_validation=VerificationStageContract(
+                    required=True,
+                    commands=("pytest",),
+                    pass_condition=None,
+                )
+            ),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
 def test_execution_contract_rejects_empty_allowed_paths() -> None:
     with pytest.raises(ValidationError):
         IssueContract(
@@ -214,6 +244,40 @@ def test_execution_contract_rejects_empty_verification() -> None:
             ),
             attempt_limits=AttemptLimitsContract(),
             timeouts=TimeoutsContract(),
+        )
+
+
+def test_attempt_record_requires_validation_pass_for_accepted() -> None:
+    with pytest.raises(ValidationError):
+        AttemptRecord.model_validate(
+            {
+                "attempt_id": "ATT-1",
+                "issue_id": "ISSUE-1",
+                "run_id": "RUN-1",
+                "engine_name": "gpt-5",
+                "engine_invocation_id": "INV-1",
+                "attempt_state": "accepted",
+                "validation_result": {"passed": False},
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+
+def test_attempt_record_requires_preflight_failed_to_be_false() -> None:
+    with pytest.raises(ValidationError):
+        AttemptRecord.model_validate(
+            {
+                "attempt_id": "ATT-1",
+                "issue_id": "ISSUE-1",
+                "run_id": "RUN-1",
+                "engine_name": "gpt-5",
+                "engine_invocation_id": "INV-1",
+                "attempt_state": "preflight_failed",
+                "preflight_passed": True,
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
         )
 
 

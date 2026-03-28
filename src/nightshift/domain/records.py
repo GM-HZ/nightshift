@@ -86,6 +86,25 @@ class AttemptRecord(BaseModel):
     ended_at: datetime | None = None
     duration_ms: int | None = None
 
+    @model_validator(mode="after")
+    def validate_attempt_state(self) -> "AttemptRecord":
+        if self.attempt_state == AttemptState.accepted:
+            if not self._validation_passed():
+                raise ValueError("accepted attempts require a passing validation_result")
+
+        if self.attempt_state == AttemptState.preflight_failed and self.preflight_passed is not False:
+            raise ValueError("preflight_failed attempts require preflight_passed to be False")
+
+        return self
+
+    def _validation_passed(self) -> bool:
+        if isinstance(self.validation_result, dict):
+            if self.validation_result.get("passed") is True:
+                return True
+            if self.validation_result.get("success") is True:
+                return True
+        return False
+
 
 class RunState(BaseModel):
     model_config = ConfigDict(extra="forbid")

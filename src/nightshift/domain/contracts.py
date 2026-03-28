@@ -101,4 +101,7 @@ class IssueContract(BaseModel):
             self.verification.regression_validation,
             self.verification.promotion_validation,
         )
-        return any(stage is not None and len(stage.commands) > 0 for stage in stages)
+        return any(
+            stage is not None and len(stage.commands) > 0 and stage.pass_condition is not None
+            for stage in stages
+        )
