@@ -7,7 +7,9 @@ from nightshift.engines.codex_adapter import CodexAdapter
 from nightshift.engines.claude_code_adapter import ClaudeCodeAdapter
 from nightshift.engines.registry import EngineRegistry
 from nightshift.orchestrator import RunOrchestrator
+from nightshift.orchestrator.recovery import RecoveryOrchestrator
 from nightshift.registry.issue_registry import IssueRegistry
+from nightshift.reporting.minimal_report import build_minimal_report
 from nightshift.store.state_store import StateStore
 from nightshift.validation import gate as validation_gate
 from nightshift.workspace.manager import WorkspaceManager
@@ -45,6 +47,14 @@ def build_issue_registry(repo_root: Path) -> IssueRegistry:
     return IssueRegistry(repo_root)
 
 
+def build_recovery_orchestrator(repo_root: Path) -> RecoveryOrchestrator:
+    return RecoveryOrchestrator(
+        issue_registry=IssueRegistry(repo_root),
+        state_store=StateStore(repo_root),
+        validation_gate=validation_gate,
+    )
+
+
 @app.command("run-one")
 def run_one(
     issue_id: str,
@@ -56,6 +66,26 @@ def run_one(
     result = orchestrator.run_one(issue_id)
     status = "accepted" if result.accepted else "rejected"
     typer.echo(f"{result.issue_id} {status} in {result.run_id} ({result.attempt_id})")
+
+
+@app.command("recover")
+def recover(
+    run: str = typer.Option(..., "--run"),
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+) -> None:
+    orchestrator = build_recovery_orchestrator(repo)
+    result = orchestrator.recover_run(run)
+    typer.echo(result.model_dump_json(indent=2, exclude_none=True))
+
+
+@app.command("report")
+def report(
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    run: str | None = typer.Option(None, "--run"),
+) -> None:
+    state_store = StateStore(repo)
+    report_model = build_minimal_report(state_store, run)
+    typer.echo(report_model.model_dump_json(indent=2, exclude_none=True))
 
 
 @queue_app.command("status")
