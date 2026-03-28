@@ -86,13 +86,15 @@ class RunOrchestrator:
             self._append_event(run_id, "attempt_started", seq=2, issue_id=issue_id, attempt_id=attempt_id)
 
             artifact_dir.mkdir(parents=True, exist_ok=True)
-            adapter, engine_outcome = self._execute_with_fallback(
-                issue_contract=issue_contract,
-                workspace=workspace,
-                issue_id=issue_id,
-                run_id=run_id,
-                attempt_id=attempt_id,
-                artifact_dir=artifact_dir,
+            adapter = self.engine_registry.resolve(issue_contract)
+            engine_outcome = self._execute_adapter(
+                adapter,
+                issue_contract,
+                workspace,
+                issue_id,
+                run_id,
+                attempt_id,
+                artifact_dir,
             )
             engine_capabilities_snapshot = _capabilities_snapshot(adapter)
 
@@ -319,40 +321,6 @@ class RunOrchestrator:
     def _ensure_schedulable(self, issue_record: IssueRecord) -> None:
         if issue_record.issue_state != IssueState.ready:
             raise ValueError(f"issue {issue_record.issue_id} is not schedulable from state {issue_record.issue_state}")
-
-    def _execute_with_fallback(
-        self,
-        *,
-        issue_contract: Any,
-        workspace: Any,
-        issue_id: str,
-        run_id: str,
-        attempt_id: str,
-        artifact_dir: Path,
-    ) -> tuple[Any, Any]:
-        adapter = self.engine_registry.resolve(issue_contract)
-        outcome = self._execute_adapter(adapter, issue_contract, workspace, issue_id, run_id, attempt_id, artifact_dir)
-        if outcome.outcome_type == "success":
-            return adapter, outcome
-
-        fallback_adapter = None
-        fallback_for = getattr(self.engine_registry, "fallback_for", None)
-        if callable(fallback_for):
-            fallback_adapter = fallback_for(issue_contract, adapter)
-
-        if fallback_adapter is None:
-            return adapter, outcome
-
-        fallback_outcome = self._execute_adapter(
-            fallback_adapter,
-            issue_contract,
-            workspace,
-            issue_id,
-            run_id,
-            attempt_id,
-            artifact_dir,
-        )
-        return fallback_adapter, fallback_outcome
 
     def _execute_adapter(
         self,

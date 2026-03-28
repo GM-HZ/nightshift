@@ -413,7 +413,7 @@ def test_run_orchestrator_aborts_when_engine_returns_non_success_outcome() -> No
     else:
         raise AssertionError("run_one should fail closed on non-success engine outcomes")
 
-    assert engine_registry.fallback_calls == 1
+    assert engine_registry.fallback_calls == 0
     assert workspace_manager.rollback_calls == 1
     assert issue_registry.record.issue_state == IssueState.ready
     assert issue_registry.record.attempt_state == AttemptState.aborted
@@ -421,7 +421,7 @@ def test_run_orchestrator_aborts_when_engine_returns_non_success_outcome() -> No
     assert state_store.saved_attempt_records[-1].attempt_state == AttemptState.aborted
 
 
-def test_run_orchestrator_uses_fallback_adapter_for_recoverable_primary_failure() -> None:
+def test_run_orchestrator_does_not_auto_switch_to_fallback_adapter() -> None:
     orchestrator, issue_registry, state_store, workspace_manager, engine_registry = make_orchestrator(
         validation_passed=True,
         outcome_type="engine_timeout",
@@ -429,13 +429,17 @@ def test_run_orchestrator_uses_fallback_adapter_for_recoverable_primary_failure(
         fallback_outcome_type="success",
     )
 
-    result = orchestrator.run_one("ISSUE-1")
+    try:
+        orchestrator.run_one("ISSUE-1")
+    except RuntimeError as error:
+        assert str(error) == "engine outcome engine_timeout cannot be accepted"
+    else:
+        raise AssertionError("run_one should not auto-switch engines")
 
-    assert result.accepted is True
-    assert engine_registry.fallback_calls == 1
-    assert issue_registry.record.issue_state == IssueState.done
-    assert state_store.saved_attempt_records[-1].engine_name == "claude"
-    assert workspace_manager.rollback_calls == 0
+    assert engine_registry.fallback_calls == 0
+    assert issue_registry.record.issue_state == IssueState.ready
+    assert state_store.saved_attempt_records[-1].engine_name == "codex"
+    assert workspace_manager.rollback_calls == 1
 
 
 def test_run_orchestrator_uses_configured_artifact_root() -> None:

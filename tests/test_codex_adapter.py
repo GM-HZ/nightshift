@@ -71,7 +71,7 @@ def test_codex_adapter_declares_expected_capabilities() -> None:
     )
 
 
-def test_registry_prefers_primary_then_fallback_then_deterministic_default() -> None:
+def test_registry_prefers_primary_then_configured_default_then_deterministic_default() -> None:
     @dataclass
     class DummyAdapter:
         adapter_name: str
@@ -101,7 +101,7 @@ def test_registry_prefers_primary_then_fallback_then_deterministic_default() -> 
             del raw_result
             return self.execute(object())
 
-    registry = EngineRegistry()
+    registry = EngineRegistry(default_adapter_name="codex")
     registry.register(DummyAdapter("codex"))
     registry.register(DummyAdapter("claude"))
 
@@ -109,13 +109,18 @@ def test_registry_prefers_primary_then_fallback_then_deterministic_default() -> 
     resolved_primary = registry.resolve(primary_contract)
     assert resolved_primary.name() == "claude"
 
-    fallback_contract = _make_issue_contract(primary="unknown", fallback="codex")
-    resolved_fallback = registry.resolve(fallback_contract)
-    assert resolved_fallback.name() == "codex"
+    with pytest.raises(LookupError):
+        registry.resolve(_make_issue_contract(primary="unknown", fallback="codex"))
 
     default_contract = _make_issue_contract(primary=None, fallback=None)
     resolved_default = registry.resolve(default_contract)
-    assert resolved_default.name() == "claude"
+    assert resolved_default.name() == "codex"
+
+    registry_without_default = EngineRegistry()
+    registry_without_default.register(DummyAdapter("codex"))
+    registry_without_default.register(DummyAdapter("claude"))
+    resolved_alphabetic_default = registry_without_default.resolve(default_contract)
+    assert resolved_alphabetic_default.name() == "claude"
 
 
 def test_codex_prepare_builds_artifact_backed_invocation(tmp_path: Path) -> None:

@@ -31,11 +31,18 @@ What works now:
 - load `nightshift.yaml`
 - read immutable issue contracts and current issue records
 - create issue worktrees and snapshots
-- execute via `codex` or `claude`
+- execute via one selected engine adapter: `codex` or `claude`
 - run validation gates
 - persist run state, issue snapshots, attempt records, events, and alerts
 - recover interrupted runs into a new controlling run
 - generate a minimal report from run-scoped persisted history
+
+Current engine selection semantics:
+
+- `run-one` selects exactly one engine per attempt
+- selection order is `IssueContract.engine_preferences.primary`, then `runner.default_engine`
+- `engine_preferences.fallback` and `runner.fallback_engine` are currently reserved schema fields
+- the MVP harness does not auto-switch engines after a failure; operators should inspect persisted attempt records and artifacts directly
 
 What is intentionally not in the MVP yet:
 

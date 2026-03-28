@@ -39,7 +39,6 @@ def build_run_orchestrator(repo_root: Path, config: object) -> RunOrchestrator:
         engine_registry=EngineRegistry(
             adapters,
             default_adapter_name=getattr(config.runner, "default_engine", None),
-            fallback_adapter_name=getattr(config.runner, "fallback_engine", None),
         ),
         validation_gate=validation_gate,
         artifact_root=getattr(config.workspace, "artifact_root", None),

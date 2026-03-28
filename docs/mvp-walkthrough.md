@@ -15,7 +15,7 @@ The current implementation is intentionally narrower than the full architecture.
 ## What The MVP Can Do
 
 - execute a single approved issue with `run-one`
-- select `codex` or `claude`, including configured fallback behavior
+- execute a single configured engine selection (`codex` or `claude`)
 - create and reuse run-scoped persistence under `nightshift-data/`
 - run validation gates and accept or reject attempts
 - recover an interrupted run into a new controlling run
@@ -80,6 +80,9 @@ Use NightShift adapter names in config and issue preferences:
 - `claude`
 
 Do not put raw model names like `gpt-5` into `runner.default_engine` or `engine_preferences.primary`; the current registry resolves adapter names, not model identifiers.
+
+`engine_preferences.fallback` and `runner.fallback_engine` are currently reserved fields.
+The MVP harness does not auto-switch engines after a failure. If the selected engine fails, the run fails and the operator should inspect the persisted attempt record and artifacts directly.
 
 ## Install And Verify
 

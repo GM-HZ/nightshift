@@ -3,6 +3,7 @@ project:
   main_branch: main
 runner:
   default_engine: codex
+  # Reserved in the current MVP. The harness does not auto-switch engines.
   fallback_engine: claude
   issue_timeout_seconds: 900
   overnight_timeout_seconds: 28800
