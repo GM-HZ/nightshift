@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -46,6 +46,10 @@ class RunOrchestrator:
         run_id = self.id_factory("run")
         attempt_id = self.id_factory("attempt")
         started_at = self.now_factory()
+        artifact_dir = self._artifact_dir(run_id, attempt_id)
+        workspace: Any = None
+        snapshot: Any = None
+        running_issue_record: IssueRecord | None = None
 
         self.state_store.save_run_state(
             RunState(
@@ -60,148 +64,176 @@ class RunOrchestrator:
         self.state_store.set_active_run(run_id)
         self._append_event(run_id, "run_started", seq=1, issue_id=issue_id)
 
-        running_issue_record = self.issue_registry.attach_attempt(issue_id, attempt_id, AttemptState.executing, run_id)
-        workspace = self.workspace_manager.prepare_workspace(issue_contract)
-        snapshot = self.workspace_manager.snapshot(workspace)
+        try:
+            running_issue_record = self.issue_registry.attach_attempt(issue_id, attempt_id, AttemptState.executing, run_id)
+            workspace = self.workspace_manager.prepare_workspace(issue_contract)
+            snapshot = self.workspace_manager.snapshot(workspace)
 
-        self.state_store.save_run_state(
-            RunState(
-                run_id=run_id,
-                run_state=RunLifecycleState.running,
-                started_at=started_at,
-                issues_attempted=1,
-                active_issue_id=issue_id,
-                active_attempt_id=attempt_id,
-                active_worktrees=[str(workspace.worktree_path)],
+            self.state_store.save_run_state(
+                RunState(
+                    run_id=run_id,
+                    run_state=RunLifecycleState.running,
+                    started_at=started_at,
+                    issues_attempted=1,
+                    active_issue_id=issue_id,
+                    active_attempt_id=attempt_id,
+                    active_worktrees=[str(workspace.worktree_path)],
+                )
             )
-        )
-        self._append_event(run_id, "attempt_started", seq=2, issue_id=issue_id, attempt_id=attempt_id)
+            self._append_event(run_id, "attempt_started", seq=2, issue_id=issue_id, attempt_id=attempt_id)
 
-        adapter = self.engine_registry.resolve(issue_contract)
-        artifact_dir = self._artifact_dir(run_id, attempt_id)
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        engine_capabilities_snapshot = _capabilities_snapshot(adapter)
-        prepared_invocation = adapter.prepare(
-            issue_contract,
-            workspace,
-            ContextBundle(
-                issue_id=issue_id,
-                prompt=self._render_prompt(issue_contract),
-                artifact_dir=artifact_dir,
-                worktree_path=workspace.worktree_path,
-                run_id=run_id,
+            adapter = self.engine_registry.resolve(issue_contract)
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            engine_capabilities_snapshot = _capabilities_snapshot(adapter)
+            prepared_invocation = adapter.prepare(
+                issue_contract,
+                workspace,
+                ContextBundle(
+                    issue_id=issue_id,
+                    prompt=self._render_prompt(issue_contract),
+                    artifact_dir=artifact_dir,
+                    worktree_path=workspace.worktree_path,
+                    run_id=run_id,
+                    attempt_id=attempt_id,
+                ),
+            )
+            engine_outcome = adapter.execute(prepared_invocation)
+
+            attempt_record = AttemptRecord(
                 attempt_id=attempt_id,
-            ),
-        )
-        engine_outcome = adapter.execute(prepared_invocation)
-
-        attempt_record = AttemptRecord(
-            attempt_id=attempt_id,
-            issue_id=issue_id,
-            run_id=run_id,
-            engine_name=adapter.name(),
-            engine_invocation_id=engine_outcome.engine_invocation_id,
-            engine_capabilities_snapshot=engine_capabilities_snapshot,
-            attempt_state=AttemptState.validating,
-            branch_name=workspace.branch_name,
-            worktree_path=str(workspace.worktree_path),
-            pre_edit_commit_sha=snapshot.pre_edit_commit_sha,
-            preflight_passed=True,
-            preflight_summary="workspace prepared",
-            engine_outcome=engine_outcome.summary,
-            recoverable=engine_outcome.recoverable,
-            retry_recommended=engine_outcome.recoverable,
-            summary=engine_outcome.summary,
-            artifact_dir=str(prepared_invocation.artifact_dir),
-            started_at=started_at,
-            ended_at=self.now_factory(),
-            duration_ms=0,
-        )
-        self.state_store.save_attempt_record(attempt_record)
-
-        validation_result = self.validation_gate.validate(issue_contract, workspace, attempt_record)
-        accepted = bool(self.validation_gate.evaluate_acceptance(validation_result))
-
-        final_attempt = AttemptRecord(
-            attempt_id=attempt_id,
-            issue_id=issue_id,
-            run_id=run_id,
-            engine_name=adapter.name(),
-            engine_invocation_id=engine_outcome.engine_invocation_id,
-            engine_capabilities_snapshot=engine_capabilities_snapshot,
-            attempt_state=AttemptState.accepted if accepted else AttemptState.rejected,
-            branch_name=workspace.branch_name,
-            worktree_path=str(workspace.worktree_path),
-            pre_edit_commit_sha=snapshot.pre_edit_commit_sha,
-            preflight_passed=True,
-            preflight_summary="workspace prepared",
-            engine_outcome=engine_outcome.summary,
-            validation_result=AttemptValidationResult(
-                passed=validation_result.passed,
-                summary=validation_result.summary,
-                details={"failed_stage": validation_result.failed_stage},
-            ),
-            recoverable=engine_outcome.recoverable,
-            retry_recommended=not accepted,
-            summary=validation_result.summary,
-            artifact_dir=str(prepared_invocation.artifact_dir),
-            started_at=started_at,
-            ended_at=self.now_factory(),
-            duration_ms=0,
-        )
-        self.state_store.save_attempt_record(final_attempt)
-
-        if accepted:
-            final_issue_record = self._update_issue_record(
-                running_issue_record,
-                issue_state=IssueState.done,
-                attempt_state=AttemptState.accepted,
-                current_run_id=run_id,
-                latest_attempt_id=attempt_id,
-                accepted_attempt_id=attempt_id,
+                issue_id=issue_id,
+                run_id=run_id,
+                engine_name=adapter.name(),
+                engine_invocation_id=engine_outcome.engine_invocation_id,
+                engine_capabilities_snapshot=engine_capabilities_snapshot,
+                attempt_state=AttemptState.validating,
                 branch_name=workspace.branch_name,
                 worktree_path=str(workspace.worktree_path),
-                last_summary=validation_result.summary,
+                pre_edit_commit_sha=snapshot.pre_edit_commit_sha,
+                preflight_passed=True,
+                preflight_summary="workspace prepared",
+                engine_outcome=engine_outcome.summary,
+                recoverable=engine_outcome.recoverable,
+                retry_recommended=engine_outcome.recoverable,
+                summary=engine_outcome.summary,
+                artifact_dir=str(artifact_dir),
+                started_at=started_at,
+                ended_at=self.now_factory(),
+                duration_ms=0,
             )
-        else:
-            self.workspace_manager.rollback(workspace, snapshot)
-            final_issue_record = self._update_issue_record(
+            self.state_store.save_attempt_record(attempt_record)
+
+            validation_result = self.validation_gate.validate(issue_contract, workspace, attempt_record)
+            accepted = bool(self.validation_gate.evaluate_acceptance(validation_result))
+
+            final_attempt = AttemptRecord(
+                attempt_id=attempt_id,
+                issue_id=issue_id,
+                run_id=run_id,
+                engine_name=adapter.name(),
+                engine_invocation_id=engine_outcome.engine_invocation_id,
+                engine_capabilities_snapshot=engine_capabilities_snapshot,
+                attempt_state=AttemptState.accepted if accepted else AttemptState.rejected,
+                branch_name=workspace.branch_name,
+                worktree_path=str(workspace.worktree_path),
+                pre_edit_commit_sha=snapshot.pre_edit_commit_sha,
+                preflight_passed=True,
+                preflight_summary="workspace prepared",
+                engine_outcome=engine_outcome.summary,
+                validation_result=AttemptValidationResult(
+                    passed=validation_result.passed,
+                    summary=validation_result.summary,
+                    details={"failed_stage": validation_result.failed_stage},
+                ),
+                recoverable=engine_outcome.recoverable,
+                retry_recommended=not accepted,
+                summary=validation_result.summary,
+                artifact_dir=str(artifact_dir),
+                started_at=started_at,
+                ended_at=self.now_factory(),
+                duration_ms=0,
+            )
+            self.state_store.save_attempt_record(final_attempt)
+
+            if accepted:
+                final_issue_record = self._update_issue_record(
+                    running_issue_record,
+                    issue_state=IssueState.done,
+                    attempt_state=AttemptState.accepted,
+                    current_run_id=run_id,
+                    latest_attempt_id=attempt_id,
+                    accepted_attempt_id=attempt_id,
+                    branch_name=workspace.branch_name,
+                    worktree_path=str(workspace.worktree_path),
+                    last_summary=validation_result.summary,
+                )
+            else:
+                self.workspace_manager.rollback(workspace, snapshot)
+                final_issue_record = self._update_issue_record(
+                    current_issue_record,
+                    issue_state=IssueState.ready,
+                    attempt_state=AttemptState.rejected,
+                    current_run_id=run_id,
+                    latest_attempt_id=attempt_id,
+                    accepted_attempt_id=None,
+                    branch_name=None,
+                    worktree_path=None,
+                    last_summary=validation_result.summary,
+                )
+
+            self.issue_registry.save_record(final_issue_record)
+            self.state_store.save_run_issue_snapshot(run_id, final_issue_record)
+            self._append_event(
+                run_id,
+                "attempt_finished",
+                seq=3,
+                issue_id=issue_id,
+                attempt_id=attempt_id,
+                payload={"accepted": accepted},
+            )
+
+            self.state_store.save_run_state(
+                RunState(
+                    run_id=run_id,
+                    run_state=RunLifecycleState.completed,
+                    started_at=started_at,
+                    ended_at=self.now_factory(),
+                    issues_attempted=1,
+                    issues_completed=1 if accepted else 0,
+                )
+            )
+            self._append_event(run_id, "run_completed", seq=4, issue_id=issue_id, payload={"accepted": accepted})
+            return RunOneResult(issue_id=issue_id, run_id=run_id, attempt_id=attempt_id, accepted=accepted)
+        except Exception:
+            if workspace is not None and snapshot is not None:
+                self.workspace_manager.rollback(workspace, snapshot)
+
+            failed_issue_record = self._update_issue_record(
                 current_issue_record,
                 issue_state=IssueState.ready,
-                attempt_state=AttemptState.rejected,
+                attempt_state=AttemptState.aborted,
                 current_run_id=run_id,
                 latest_attempt_id=attempt_id,
                 accepted_attempt_id=None,
                 branch_name=None,
                 worktree_path=None,
-                last_summary=validation_result.summary,
+                last_summary="run failed",
             )
-
-        self.issue_registry.save_record(final_issue_record)
-        self.state_store.save_run_issue_snapshot(run_id, final_issue_record)
-        self._append_event(
-            run_id,
-            "attempt_finished",
-            seq=3,
-            issue_id=issue_id,
-            attempt_id=attempt_id,
-            payload={"accepted": accepted},
-        )
-
-        self.state_store.save_run_state(
-            RunState(
-                run_id=run_id,
-                run_state=RunLifecycleState.completed,
-                started_at=started_at,
-                ended_at=self.now_factory(),
-                issues_attempted=1,
-                issues_completed=1 if accepted else 0,
+            self.issue_registry.save_record(failed_issue_record)
+            self.state_store.save_run_issue_snapshot(run_id, failed_issue_record)
+            self.state_store.save_run_state(
+                RunState(
+                    run_id=run_id,
+                    run_state=RunLifecycleState.aborted,
+                    started_at=started_at,
+                    ended_at=self.now_factory(),
+                    issues_attempted=1,
+                )
             )
-        )
-        self._append_event(run_id, "run_completed", seq=4, issue_id=issue_id, payload={"accepted": accepted})
-        self.state_store.set_active_run(None)
-
-        return RunOneResult(issue_id=issue_id, run_id=run_id, attempt_id=attempt_id, accepted=accepted)
+            self._append_event(run_id, "run_failed", seq=3, issue_id=issue_id, attempt_id=attempt_id)
+            raise
+        finally:
+            self.state_store.set_active_run(None)
 
     def _update_issue_record(
         self,
@@ -283,7 +315,10 @@ def _capabilities_snapshot(adapter: Any) -> dict[str, Any]:
     if value is None:
         return {}
 
+    if is_dataclass(value):
+        return asdict(value)
+
     try:
-        return dict(value.__dict__)
-    except AttributeError:
+        return dict(value)
+    except (TypeError, ValueError):
         return {}

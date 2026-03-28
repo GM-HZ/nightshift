@@ -113,8 +113,9 @@ class FakeIssueRegistry:
 
 
 class FakeStateStore:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, raise_on_event_type: str | None = None) -> None:
         self.root = root
+        self.raise_on_event_type = raise_on_event_type
         self.saved_run_states: list[RunState] = []
         self.saved_attempt_records: list[AttemptRecord] = []
         self.saved_snapshots: list[tuple[str, IssueRecord]] = []
@@ -134,6 +135,8 @@ class FakeStateStore:
         self.saved_snapshots.append((run_id, issue_record))
 
     def append_event(self, event_record: EventRecord) -> None:
+        if self.raise_on_event_type == event_record.event_type:
+            raise RuntimeError(f"event write failed for {event_record.event_type}")
         self.events.append(event_record)
 
 
@@ -158,7 +161,8 @@ class FakeWorkspaceManager:
 
 
 class FakeAdapter:
-    def __init__(self) -> None:
+    def __init__(self, *, raise_on_execute: bool = False) -> None:
+        self.raise_on_execute = raise_on_execute
         self.prepared_invocations: list[PreparedInvocation] = []
 
     def name(self) -> str:
@@ -183,6 +187,8 @@ class FakeAdapter:
         return invocation
 
     def execute(self, prepared_invocation: PreparedInvocation) -> EngineOutcome:
+        if self.raise_on_execute:
+            raise RuntimeError("engine crashed")
         return EngineOutcome(
             engine_name="codex",
             engine_invocation_id=prepared_invocation.invocation_id,
@@ -224,11 +230,16 @@ class FakeValidationGate:
         return validation_result.passed
 
 
-def make_orchestrator(*, validation_passed: bool) -> tuple[RunOrchestrator, FakeIssueRegistry, FakeStateStore, FakeWorkspaceManager]:
+def make_orchestrator(
+    *,
+    validation_passed: bool,
+    raise_on_execute: bool = False,
+    raise_on_event_type: str | None = None,
+) -> tuple[RunOrchestrator, FakeIssueRegistry, FakeStateStore, FakeWorkspaceManager]:
     issue_registry = FakeIssueRegistry()
-    state_store = FakeStateStore(root=Path("/tmp/nightshift"))
+    state_store = FakeStateStore(root=Path("/tmp/nightshift"), raise_on_event_type=raise_on_event_type)
     workspace_manager = FakeWorkspaceManager()
-    adapter = FakeAdapter()
+    adapter = FakeAdapter(raise_on_execute=raise_on_execute)
     engine_registry = FakeEngineRegistry(adapter)
     validation_gate = FakeValidationGate(passed=validation_passed)
 
@@ -262,6 +273,8 @@ def test_run_orchestrator_accepts_issue_and_persists_final_state() -> None:
     assert state_store.saved_run_states[-1].issues_completed == 1
     assert state_store.saved_attempt_records[-1].attempt_state == AttemptState.accepted
     assert state_store.saved_attempt_records[-1].validation_result is not None
+    assert state_store.saved_attempt_records[-1].artifact_dir == "/tmp/nightshift/nightshift-data/runs/RUN-1/artifacts/attempts/ATTEMPT-1"
+    assert state_store.saved_attempt_records[-1].engine_capabilities_snapshot["supports_noninteractive_mode"] is True
     assert state_store.saved_snapshots[-1][1].issue_state == IssueState.done
     assert workspace_manager.rollback_calls == 0
     assert [event.event_type for event in state_store.events] == [
@@ -285,6 +298,47 @@ def test_run_orchestrator_rejects_issue_and_rolls_back_workspace() -> None:
     assert state_store.saved_attempt_records[-1].attempt_state == AttemptState.rejected
     assert state_store.saved_run_states[-1].issues_completed == 0
     assert state_store.saved_snapshots[-1][1].issue_state == IssueState.ready
+
+
+def test_run_orchestrator_clears_active_run_and_aborts_issue_on_engine_exception() -> None:
+    orchestrator, issue_registry, state_store, workspace_manager = make_orchestrator(
+        validation_passed=True,
+        raise_on_execute=True,
+    )
+
+    try:
+        orchestrator.run_one("ISSUE-1")
+    except RuntimeError as error:
+        assert str(error) == "engine crashed"
+    else:
+        raise AssertionError("run_one should re-raise engine failures")
+
+    assert workspace_manager.rollback_calls == 1
+    assert state_store.active_runs == ["RUN-1", None]
+    assert state_store.saved_run_states[-1].run_state == RunLifecycleState.aborted
+    assert issue_registry.record.issue_state == IssueState.ready
+    assert issue_registry.record.attempt_state == AttemptState.aborted
+    assert state_store.saved_snapshots[-1][1].issue_state == IssueState.ready
+    assert state_store.events[-1].event_type == "run_failed"
+
+
+def test_run_orchestrator_clears_active_run_even_if_failure_event_write_raises() -> None:
+    orchestrator, issue_registry, state_store, workspace_manager = make_orchestrator(
+        validation_passed=True,
+        raise_on_execute=True,
+        raise_on_event_type="run_failed",
+    )
+
+    try:
+        orchestrator.run_one("ISSUE-1")
+    except RuntimeError as error:
+        assert str(error) == "event write failed for run_failed"
+    else:
+        raise AssertionError("run_one should re-raise failure-path write errors")
+
+    assert workspace_manager.rollback_calls == 1
+    assert state_store.active_runs == ["RUN-1", None]
+    assert issue_registry.record.attempt_state == AttemptState.aborted
 
 
 def test_run_one_cli_uses_builder_and_prints_result(tmp_path: Path, monkeypatch) -> None:
