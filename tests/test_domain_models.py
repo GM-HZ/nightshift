@@ -29,7 +29,8 @@ def test_issue_contract_rejects_runtime_fields() -> None:
                 "required": True,
                 "commands": ["pytest"],
                 "pass_condition": {
-                    "type": "exit_code_zero",
+                    "type": "exit_code",
+                    "expected": 0,
                 },
             }
         },
@@ -72,7 +73,7 @@ def test_issue_contract_is_frozen_after_creation() -> None:
             issue_validation=VerificationStageContract(
                 required=True,
                 commands=("pytest",),
-                pass_condition=PassConditionContract(type="exit_code_zero"),
+                pass_condition=PassConditionContract(type="exit_code", expected=0),
             )
         ),
         engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
@@ -149,7 +150,7 @@ def test_execution_contract_requires_paths_and_validation() -> None:
             issue_validation=VerificationStageContract(
                 required=True,
                 commands=("pytest",),
-                pass_condition=PassConditionContract(type="exit_code_zero"),
+                pass_condition=PassConditionContract(type="exit_code", expected=0),
             )
         ),
         engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
@@ -195,6 +196,35 @@ def test_execution_contract_rejects_commands_without_pass_condition() -> None:
         )
 
 
+def test_execution_contract_rejects_unknown_pass_condition_type() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(
+                issue_validation=VerificationStageContract(
+                    required=True,
+                    commands=("pytest",),
+                    pass_condition={"type": "bogus"},
+                )
+            ),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
 def test_execution_contract_rejects_empty_allowed_paths() -> None:
     with pytest.raises(ValidationError):
         IssueContract(
@@ -209,7 +239,7 @@ def test_execution_contract_rejects_empty_allowed_paths() -> None:
                 issue_validation=VerificationStageContract(
                     required=True,
                     commands=("pytest",),
-                    pass_condition=PassConditionContract(type="exit_code_zero"),
+                    pass_condition=PassConditionContract(type="exit_code", expected=0),
                 )
             ),
             engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),

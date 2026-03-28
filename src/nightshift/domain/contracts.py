@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -15,8 +15,15 @@ class EnginePreferencesContract(BaseModel):
 class PassConditionContract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    type: str
+    type: Literal["exit_code", "all_exit_codes_zero"]
     expected: Any | None = None
+
+    @model_validator(mode="after")
+    def validate_expected(self) -> "PassConditionContract":
+        if self.type == "exit_code" and self.expected is None:
+            raise ValueError("exit_code pass conditions require an expected value")
+
+        return self
 
 
 class VerificationStageContract(BaseModel):
