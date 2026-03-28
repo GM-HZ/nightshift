@@ -17,6 +17,7 @@ NightShift is an overnight AI coding harness. This repository now contains both 
 - `docs/superpowers/specs/`: architecture history and current spec set
 - `docs/mvp-walkthrough.md`: implementation-facing usage notes for the current MVP
 - `docs/2026-03-28-workflow-verification-report.md`: real operator rehearsal results and confirmed workflow gaps
+- `docs/local-development.md`: safe local execution guidance for multi-worktree development
 
 ## Current Recommended Entry Points
 
@@ -25,6 +26,7 @@ NightShift is an overnight AI coding harness. This repository now contains both 
 - Current detailed design pack: `docs/superpowers/specs/nightshift-v4.2.1/README.md`
 - MVP walkthrough: `docs/mvp-walkthrough.md`
 - Latest workflow verification: `docs/2026-03-28-workflow-verification-report.md`
+- Local development note: `docs/local-development.md`
 
 ## Current MVP Boundaries
 
@@ -70,3 +72,5 @@ The current branch is intentionally not a full `v4.2.1` product-complete impleme
 ```bash
 python -m pytest -v
 ```
+
+If you are working across multiple worktrees or editable installs, read `docs/local-development.md` first and prefer an explicit `PYTHONPATH` plus known interpreter path.

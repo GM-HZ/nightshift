@@ -12,6 +12,10 @@ The active design source of truth is:
 
 The current implementation is intentionally narrower than the full architecture. It is a kernel MVP, not the full overnight product workflow.
 
+For local multi-worktree development guidance, also read:
+
+- `docs/local-development.md`
+
 ## What The MVP Can Do
 
 - execute a single approved issue with `run-one`
@@ -90,6 +94,8 @@ The MVP harness does not auto-switch engines after a failure. If the selected en
 python -m pip install -e .
 python -m pytest -v
 ```
+
+If multiple worktrees or editable installs exist on the same machine, prefer the explicit import-path pattern documented in `docs/local-development.md`.
 
 ## CLI Surface
 
