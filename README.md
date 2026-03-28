@@ -18,6 +18,7 @@ NightShift is an overnight AI coding harness. This repository now contains both 
 - `docs/mvp-walkthrough.md`: implementation-facing usage notes for the current MVP
 - `docs/2026-03-28-workflow-verification-report.md`: real operator rehearsal results and confirmed workflow gaps
 - `docs/local-development.md`: safe local execution guidance for multi-worktree development
+- `docs/architecture/README.md`: current architecture entry point, split into kernel and product workflow views
 
 ## Current Recommended Entry Points
 
@@ -27,6 +28,7 @@ NightShift is an overnight AI coding harness. This repository now contains both 
 - MVP walkthrough: `docs/mvp-walkthrough.md`
 - Latest workflow verification: `docs/2026-03-28-workflow-verification-report.md`
 - Local development note: `docs/local-development.md`
+- Architecture entry point: `docs/architecture/README.md`
 
 ## Current MVP Boundaries
 
