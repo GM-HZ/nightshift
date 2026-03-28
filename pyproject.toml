@@ -15,6 +15,9 @@ dependencies = [
   "pytest",
 ]
 
+[project.scripts]
+nightshift = "nightshift.cli.main:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
