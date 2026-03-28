@@ -15,11 +15,11 @@ class IssueRecord(BaseModel):
     issue_state: IssueState
     attempt_state: AttemptState
     delivery_state: DeliveryState
+    queue_priority: str
     delivery_id: str | None = None
     delivery_ref: str | None = None
     blocker_type: str | None = None
     progress_type: str | None = None
-    queue_priority: str | None = None
     current_run_id: str | None = None
     latest_attempt_id: str | None = None
     accepted_attempt_id: str | None = None
