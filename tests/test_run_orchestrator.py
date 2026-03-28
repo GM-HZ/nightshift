@@ -500,3 +500,25 @@ def test_run_one_cli_uses_repo_path_from_config_when_repo_flag_omitted(tmp_path:
 
     assert result.exit_code == 0
     assert observed_repo_roots == [repo_path]
+
+
+def test_run_one_cli_surfaces_operator_friendly_failure_summary(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    config_path.write_text("project:\n  repo_path: .\n  main_branch: main\nrunner:\n  default_engine: codex\n  issue_timeout_seconds: 1\n  overnight_timeout_seconds: 1\nvalidation:\n  enabled: true\nissue_defaults:\n  default_priority: high\n  default_forbidden_paths: [secrets]\n  default_test_edit_policy:\n    can_add_tests: true\n    can_modify_existing_tests: true\n    can_weaken_assertions: false\n    requires_test_change_reason: true\n  default_attempt_limits:\n    max_files_changed: 1\n    max_lines_added: 1\n    max_lines_deleted: 1\n  default_timeouts:\n    command_seconds: 1\n    issue_budget_seconds: 1\nretry:\n  max_retries: 1\n  retry_policy: never\n  failure_circuit_breaker: false\nworkspace:\n  worktree_root: .nightshift/worktrees\n  artifact_root: nightshift-data/runs\nalerts:\n  enabled_channels: []\n  severity_thresholds:\n    info: info\n    warning: warning\n    critical: critical\nreport:\n  output_directory: nightshift-data/reports\n  summary_verbosity: concise\n")
+
+    class FakeCLIOrchestrator:
+        def run_one(self, issue_id: str) -> RunOneResult:
+            assert issue_id == "ISSUE-1"
+            raise RuntimeError("engine outcome engine_crash cannot be accepted")
+
+    monkeypatch.setattr("nightshift.cli.app.build_run_orchestrator", lambda repo, config: FakeCLIOrchestrator())
+
+    result = CliRunner().invoke(
+        app,
+        ["run-one", "ISSUE-1", "--repo", str(tmp_path), "--config", str(config_path)],
+    )
+
+    assert result.exit_code == 1
+    assert "run-one failed for ISSUE-1" in result.stderr
+    assert "engine outcome engine_crash cannot be accepted" in result.stderr
+    assert "Traceback" not in result.stderr

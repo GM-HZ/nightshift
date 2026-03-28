@@ -89,7 +89,14 @@ def run_one(
     loaded_config = load_config(config)
     repo_root = _resolve_repo_root(repo, loaded_config)
     orchestrator = build_run_orchestrator(repo_root, loaded_config)
-    result = orchestrator.run_one(issue_id)
+    try:
+        result = orchestrator.run_one(issue_id)
+    except Exception as error:
+        typer.echo(
+            f"run-one failed for {issue_id}: {error}. Inspect nightshift-data/runs/ for persisted state and artifacts.",
+            err=True,
+        )
+        raise typer.Exit(1) from error
     status = "accepted" if result.accepted else "rejected"
     typer.echo(f"{result.issue_id} {status} in {result.run_id} ({result.attempt_id})")
 

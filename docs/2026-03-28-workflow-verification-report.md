@@ -176,7 +176,7 @@ This validated the intended “resume at validation boundary” recovery path.
 
 ## Confirmed Gaps
 
-### 1. `run-one` still surfaces engine failures as a Python traceback
+### 1. Resolved after rehearsal: `run-one` surfaced engine failures as a Python traceback
 
 In the smoke run, engine failure returned a full traceback ending in:
 
@@ -184,7 +184,7 @@ In the smoke run, engine failure returned a full traceback ending in:
 RuntimeError: engine outcome engine_crash cannot be accepted
 ```
 
-This is technically correct but operator-hostile. The failure should be rendered as a short CLI summary that points the operator at the persisted attempt record and artifact directory.
+This was technically correct but operator-hostile at rehearsal time. It has since been fixed in the follow-up CLI patch so `run-one` returns a short failure summary instead of a raw traceback.
 
 ### 2. Resolved after rehearsal: recovery terminal run states were not clearing active fields
 
@@ -228,12 +228,10 @@ The current team workflow should assume that:
 
 The important news is positive: the current `v4.2.1` MVP is operational as a real kernel. The core execution, persistence, reporting, and recovery model all survived a real operator-style rehearsal.
 
-The remaining issues are now concentrated in workflow hardening, not in the main architecture:
+The remaining issues are now concentrated in development workflow hardening, not in the main architecture:
 
-- improve CLI failure presentation
 - make local execution guidance safer in multi-worktree development
 
 ## Recommended Next Fix Order
 
-1. Replace raw traceback output in `run-one` with a short operator-facing failure summary.
-2. Add a short local development note documenting safe command invocation when multiple editable installs or worktrees exist.
+1. Add a short local development note documenting safe command invocation when multiple editable installs or worktrees exist.
