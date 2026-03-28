@@ -345,33 +345,35 @@ def test_execution_contract_rejects_malformed_secondary_stage() -> None:
         )
 
 
-def test_execution_contract_rejects_optional_only_verification() -> None:
-    with pytest.raises(ValidationError):
-        IssueContract(
-            issue_id="ISSUE-1",
-            title="Run execution work",
-            kind="execution",
-            priority="high",
-            goal="Do the execution task",
-            allowed_paths=["src"],
-            forbidden_paths=["secrets"],
-            verification=VerificationContract(
-                issue_validation=VerificationStageContract(
-                    required=False,
-                    commands=("pytest",),
-                    pass_condition=PassConditionContract(type="exit_code", expected=0),
-                )
-            ),
-            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
-            test_edit_policy=TestEditPolicyContract(
-                can_add_tests=True,
-                can_modify_existing_tests=True,
-                can_weaken_assertions=False,
-                requires_test_change_reason=True,
-            ),
-            attempt_limits=AttemptLimitsContract(),
-            timeouts=TimeoutsContract(),
-        )
+def test_execution_contract_accepts_optional_concrete_verification() -> None:
+    contract = IssueContract(
+        issue_id="ISSUE-1",
+        title="Run execution work",
+        kind="execution",
+        priority="high",
+        goal="Do the execution task",
+        allowed_paths=["src"],
+        forbidden_paths=["secrets"],
+        verification=VerificationContract(
+            issue_validation=VerificationStageContract(
+                required=False,
+                commands=("pytest",),
+                pass_condition=PassConditionContract(type="exit_code", expected=0),
+            )
+        ),
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+        test_edit_policy=TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        attempt_limits=AttemptLimitsContract(),
+        timeouts=TimeoutsContract(),
+    )
+
+    assert contract.verification.issue_validation is not None
+    assert contract.verification.issue_validation.required is False
 
 
 @pytest.mark.parametrize(

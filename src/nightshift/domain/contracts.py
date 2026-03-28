@@ -130,7 +130,6 @@ class IssueContract(BaseModel):
         )
         return any(
             stage is not None
-            and stage.required
             and len(stage.commands) > 0
             and stage.pass_condition is not None
             for stage in stages
