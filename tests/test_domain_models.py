@@ -19,7 +19,7 @@ def test_issue_contract_rejects_runtime_fields() -> None:
     payload = {
         "issue_id": "ISSUE-1",
         "title": "Implement feature",
-        "kind": "task",
+        "kind": "planning",
         "priority": "high",
         "goal": "Ship the feature",
         "allowed_paths": ["src"],
@@ -64,7 +64,7 @@ def test_issue_contract_is_frozen_after_creation() -> None:
     contract = IssueContract(
         issue_id="ISSUE-1",
         title="Implement feature",
-        kind="task",
+        kind="planning",
         priority="high",
         goal="Ship the feature",
         allowed_paths=["src"],
@@ -108,7 +108,7 @@ def test_issue_record_from_contract_seeds_queue_priority() -> None:
     contract = IssueContract(
         issue_id="ISSUE-1",
         title="Implement feature",
-        kind="task",
+        kind="planning",
         priority="high",
         goal="Ship the feature",
         allowed_paths=["src"],
@@ -141,7 +141,7 @@ def test_issue_record_from_contract_rejects_contract_field_overrides() -> None:
     contract = IssueContract(
         issue_id="ISSUE-1",
         title="Implement feature",
-        kind="task",
+        kind="planning",
         priority="high",
         goal="Ship the feature",
         allowed_paths=["src"],
@@ -168,6 +168,29 @@ def test_issue_record_from_contract_rejects_contract_field_overrides() -> None:
             delivery_state="none",
             created_at="2026-03-28T00:00:00Z",
             updated_at="2026-03-28T00:00:00Z",
+        )
+
+
+def test_issue_contract_rejects_unknown_kind() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Unknown kind work",
+            kind="task",
+            priority="high",
+            goal="Do the task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
         )
 
 
@@ -246,6 +269,40 @@ def test_execution_contract_rejects_unknown_pass_condition_type() -> None:
                     commands=("pytest",),
                     pass_condition={"type": "bogus"},
                 )
+            ),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
+def test_execution_contract_rejects_malformed_secondary_stage() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(
+                issue_validation=VerificationStageContract(
+                    required=True,
+                    commands=("pytest",),
+                    pass_condition=PassConditionContract(type="exit_code", expected=0),
+                ),
+                regression_validation=VerificationStageContract(
+                    required=True,
+                    commands=("pytest -m regression",),
+                    pass_condition=None,
+                ),
             ),
             engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
             test_edit_policy=TestEditPolicyContract(

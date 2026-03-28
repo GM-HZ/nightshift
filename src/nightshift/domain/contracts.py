@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
+from .enums import IssueKind
 
 
 class EnginePreferencesContract(BaseModel):
@@ -36,6 +37,16 @@ class VerificationStageContract(BaseModel):
     required: bool
     commands: tuple[str, ...] = Field(default_factory=tuple)
     pass_condition: PassConditionContract | None = None
+
+    @model_validator(mode="after")
+    def validate_stage_shape(self) -> "VerificationStageContract":
+        if self.commands and self.pass_condition is None:
+            raise ValueError("verification stages with commands require a pass_condition")
+
+        if not self.commands and self.pass_condition is not None:
+            raise ValueError("verification stages without commands must not declare a pass_condition")
+
+        return self
 
 
 class VerificationContract(BaseModel):
@@ -79,7 +90,7 @@ class IssueContract(BaseModel):
 
     issue_id: str
     title: str
-    kind: str
+    kind: IssueKind
     goal: str
     allowed_paths: tuple[str, ...]
     forbidden_paths: tuple[str, ...]
@@ -96,7 +107,7 @@ class IssueContract(BaseModel):
 
     @model_validator(mode="after")
     def validate_execution_requirements(self) -> "IssueContract":
-        if self.kind == "execution":
+        if self.kind == IssueKind.execution:
             if not self.allowed_paths:
                 raise ValueError("execution contracts require allowed_paths")
 

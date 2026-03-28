@@ -10,6 +10,13 @@ class IssueState(StrEnum):
     done = "done"
 
 
+class IssueKind(StrEnum):
+    planning = "planning"
+    repro = "repro"
+    investigation = "investigation"
+    execution = "execution"
+
+
 class AttemptState(StrEnum):
     pending = "pending"
     preflight_failed = "preflight_failed"
