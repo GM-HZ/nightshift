@@ -115,10 +115,19 @@ class IssueIngestionConfig(BaseModel):
     required_label: NonEmptyStr = "nightshift"
 
 
+class DeliveryConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    repo_full_name: NonEmptyStr | None = None
+    remote_name: NonEmptyStr = "origin"
+    base_branch: NonEmptyStr = "master"
+
+
 class ProductConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     issue_ingestion: IssueIngestionConfig = Field(default_factory=IssueIngestionConfig)
+    delivery: DeliveryConfig = Field(default_factory=DeliveryConfig)
 
 
 class NightShiftConfig(BaseModel):
