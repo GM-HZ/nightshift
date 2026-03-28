@@ -136,8 +136,12 @@ def test_codex_prepare_builds_artifact_backed_invocation(tmp_path: Path) -> None
     assert prepared.stdout_path == artifact_dir / "stdout.txt"
     assert prepared.stderr_path == artifact_dir / "stderr.txt"
     assert prepared.outcome_path == artifact_dir / "engine-outcome.json"
+    assert prepared.context_path == artifact_dir / "context.txt"
+    assert prepared.structured_output_path == artifact_dir / "structured-output.json"
+    assert prepared.timeout_seconds == 60
     assert prepared.command == ("python", "-c", "print('codex')")
     assert prepared.prompt == "Fix the failing issue"
+    assert prepared.context_path.read_text() == "Fix the failing issue"
 
 
 def test_codex_execute_writes_artifacts_and_normalizes_outcome(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -152,12 +156,15 @@ def test_codex_execute_writes_artifacts_and_normalizes_outcome(tmp_path: Path, m
     adapter = CodexAdapter(command=("python", "-c", "print('codex')"))
     prepared = adapter.prepare(issue_contract, tmp_path / "workspace", context_bundle)
 
+    run_kwargs: dict[str, Any] = {}
+
     def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        del args, kwargs
+        del args
+        run_kwargs.update(kwargs)
         return subprocess.CompletedProcess(
             args=("python", "-c", "print('codex')"),
             returncode=0,
-            stdout="hello from codex\n",
+            stdout='{"summary":"hello from codex"}\n',
             stderr="",
         )
 
@@ -173,15 +180,52 @@ def test_codex_execute_writes_artifacts_and_normalizes_outcome(tmp_path: Path, m
     assert outcome.recoverable is False
     assert outcome.stdout_path == str(prepared.stdout_path)
     assert outcome.stderr_path == str(prepared.stderr_path)
+    assert run_kwargs["input"] == "Fix the failing issue"
+    assert run_kwargs["timeout"] == 60
     assert outcome.artifact_paths == (
+        str(prepared.context_path),
         str(prepared.stdout_path),
         str(prepared.stderr_path),
+        str(prepared.structured_output_path),
         str(prepared.outcome_path),
     )
-    assert prepared.stdout_path.read_text() == "hello from codex\n"
+    assert prepared.stdout_path.read_text() == '{"summary":"hello from codex"}\n'
     assert prepared.stderr_path.read_text() == ""
+    assert json.loads(prepared.structured_output_path.read_text()) == {"summary": "hello from codex"}
 
     outcome_payload = json.loads(prepared.outcome_path.read_text())
     assert outcome_payload["engine_name"] == "codex"
     assert outcome_payload["outcome_type"] == "success"
     assert outcome_payload["summary"] == "command completed successfully"
+
+
+def test_codex_execute_normalizes_timeout_as_engine_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    issue_contract = _make_issue_contract()
+    artifact_dir = tmp_path / "artifacts"
+    context_bundle = ContextBundle(
+        issue_id=issue_contract.issue_id,
+        prompt="Fix the failing issue",
+        artifact_dir=artifact_dir,
+        worktree_path=tmp_path / "worktree",
+    )
+    adapter = CodexAdapter(command=("python", "-c", "print('codex')"))
+    prepared = adapter.prepare(issue_contract, tmp_path / "workspace", context_bundle)
+
+    def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        del args
+        raise subprocess.TimeoutExpired(
+            cmd=kwargs["args"] if "args" in kwargs else prepared.command,
+            timeout=kwargs["timeout"],
+            output="partial stdout\n",
+            stderr="partial stderr\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    outcome = adapter.execute(prepared)
+
+    assert outcome.outcome_type == "engine_timeout"
+    assert outcome.engine_error_type == "engine_timeout"
+    assert outcome.recoverable is True
+    assert prepared.stdout_path.read_text() == "partial stdout\n"
+    assert prepared.stderr_path.read_text() == "partial stderr\n"

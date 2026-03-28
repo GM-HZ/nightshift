@@ -43,7 +43,6 @@ class CodexAdapter(EngineAdapter):
         )
 
     def prepare(self, issue_contract: IssueContract, workspace: object, context_bundle: ContextBundle) -> PreparedInvocation:
-        del issue_contract
         cwd = _workspace_path(workspace)
         artifact_dir = Path(context_bundle.artifact_dir)
         artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -52,6 +51,7 @@ class CodexAdapter(EngineAdapter):
         stderr_path = artifact_dir / "stderr.txt"
         outcome_path = artifact_dir / "engine-outcome.json"
         context_path = artifact_dir / "context.txt"
+        structured_output_path = artifact_dir / "structured-output.json"
         context_path.write_text(context_bundle.prompt)
         return PreparedInvocation(
             engine_name=self.name(),
@@ -64,6 +64,8 @@ class CodexAdapter(EngineAdapter):
             stderr_path=stderr_path,
             outcome_path=outcome_path,
             context_path=context_path,
+            structured_output_path=structured_output_path,
+            timeout_seconds=issue_contract.timeouts.command_seconds,
         )
 
     def execute(self, prepared_invocation: PreparedInvocation) -> EngineOutcome:
@@ -75,8 +77,10 @@ class CodexAdapter(EngineAdapter):
                 capture_output=True,
                 text=True,
                 check=False,
+                input=prepared_invocation.prompt,
+                timeout=prepared_invocation.timeout_seconds,
             )
-        except FileNotFoundError as error:
+        except OSError as error:
             return self._finalize(
                 _ExecutionResult(
                     prepared=prepared_invocation,
@@ -88,8 +92,8 @@ class CodexAdapter(EngineAdapter):
                 )
             )
         except subprocess.TimeoutExpired as error:
-            prepared_invocation.stdout_path.write_text(error.stdout or "")
-            prepared_invocation.stderr_path.write_text(error.stderr or "")
+            prepared_invocation.stdout_path.write_text(_text_or_empty(error.stdout))
+            prepared_invocation.stderr_path.write_text(_text_or_empty(error.stderr))
             return self._finalize(
                 _ExecutionResult(
                     prepared=prepared_invocation,
@@ -103,6 +107,7 @@ class CodexAdapter(EngineAdapter):
 
         prepared_invocation.stdout_path.write_text(completed.stdout or "")
         prepared_invocation.stderr_path.write_text(completed.stderr or "")
+        _write_structured_output(prepared_invocation, completed.stdout)
         return self._finalize(
             _ExecutionResult(
                 prepared=prepared_invocation,
@@ -193,11 +198,35 @@ class CodexAdapter(EngineAdapter):
 
 
 def _artifact_paths(prepared: PreparedInvocation) -> tuple[str, ...]:
-    return (
-        str(prepared.stdout_path),
-        str(prepared.stderr_path),
-        str(prepared.outcome_path),
-    )
+    artifact_paths: list[str] = []
+    if prepared.context_path is not None:
+        artifact_paths.append(str(prepared.context_path))
+    artifact_paths.append(str(prepared.stdout_path))
+    artifact_paths.append(str(prepared.stderr_path))
+    if prepared.structured_output_path is not None and prepared.structured_output_path.exists():
+        artifact_paths.append(str(prepared.structured_output_path))
+    artifact_paths.append(str(prepared.outcome_path))
+    return tuple(artifact_paths)
+
+
+def _write_structured_output(prepared: PreparedInvocation, stdout: str | None) -> None:
+    if prepared.structured_output_path is None or not stdout:
+        return
+
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError:
+        return
+
+    prepared.structured_output_path.write_text(json.dumps(payload, indent=2))
+
+
+def _text_or_empty(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode()
+    return value
 
 
 def _duration_ms(started_at: datetime, ended_at: datetime) -> int:
@@ -220,4 +249,3 @@ def _workspace_path(workspace: object) -> Path:
         return Path(candidate)
 
     raise TypeError("workspace must be a path or expose worktree_path")
-

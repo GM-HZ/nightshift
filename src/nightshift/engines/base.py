@@ -31,6 +31,8 @@ class PreparedInvocation:
     stderr_path: Path
     outcome_path: Path
     context_path: Path | None = None
+    structured_output_path: Path | None = None
+    timeout_seconds: int | None = None
     env: dict[str, str] = field(default_factory=dict)
 
 
@@ -62,4 +64,3 @@ class EngineAdapter(Protocol):
     def execute(self, prepared_invocation: PreparedInvocation) -> EngineOutcome: ...
 
     def normalize_output(self, raw_result: object) -> EngineOutcome: ...
-
