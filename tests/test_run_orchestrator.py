@@ -21,6 +21,8 @@ from nightshift.domain.contracts import (
 from nightshift.domain.records import AttemptRecord, EventRecord, IssueRecord, RunState
 from nightshift.engines.base import EngineCapabilities, EngineOutcome, PreparedInvocation
 from nightshift.orchestrator.run_orchestrator import RunOneResult, RunOrchestrator
+from nightshift.reporting.minimal_report import build_minimal_report
+from nightshift.store.state_store import StateStore
 from nightshift.validation.gate import ValidationResult
 
 
@@ -419,6 +421,40 @@ def test_run_orchestrator_aborts_when_engine_returns_non_success_outcome() -> No
     assert issue_registry.record.attempt_state == AttemptState.aborted
     assert state_store.saved_run_states[-1].run_state == RunLifecycleState.aborted
     assert state_store.saved_attempt_records[-1].attempt_state == AttemptState.aborted
+
+
+def test_run_orchestrator_persists_failed_attempt_record_with_real_state_store(tmp_path: Path) -> None:
+    issue_registry = FakeIssueRegistry()
+    state_store = StateStore(tmp_path)
+    workspace_manager = FakeWorkspaceManager()
+    engine_registry = FakeEngineRegistry(FakeAdapter(adapter_name="codex", outcome_type="engine_crash", recoverable=True))
+    validation_gate = FakeValidationGate(passed=True)
+    ids = iter(["RUN-1", "ATTEMPT-1"])
+    orchestrator = RunOrchestrator(
+        issue_registry=issue_registry,
+        state_store=state_store,
+        workspace_manager=workspace_manager,
+        engine_registry=engine_registry,
+        validation_gate=validation_gate,
+        id_factory=lambda kind: next(ids),
+        now_factory=lambda: datetime(2026, 3, 28, tzinfo=timezone.utc),
+    )
+
+    try:
+        orchestrator.run_one("ISSUE-1")
+    except RuntimeError as error:
+        assert str(error) == "engine outcome engine_crash cannot be accepted"
+    else:
+        raise AssertionError("run_one should fail closed on non-success engine outcomes")
+
+    attempt_path = tmp_path / "nightshift-data" / "runs" / "RUN-1" / "attempts" / "ATTEMPT-1.json"
+    assert attempt_path.is_file()
+    attempt = state_store.load_attempt_record("ATTEMPT-1")
+    assert attempt.attempt_state == AttemptState.aborted
+    assert attempt.issue_id == "ISSUE-1"
+
+    report = build_minimal_report(state_store, "RUN-1")
+    assert report.attempt_count == 1
 
 
 def test_run_orchestrator_does_not_auto_switch_to_fallback_adapter() -> None:

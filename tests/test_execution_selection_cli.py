@@ -133,3 +133,25 @@ def test_run_command_handles_empty_all_selection_cleanly(monkeypatch, tmp_path: 
 
     assert result.exit_code == 0
     assert "no schedulable issues selected" in result.stdout
+
+
+def test_run_command_surfaces_operator_friendly_failure_summary(monkeypatch, tmp_path: Path) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    _write_config(config_path, tmp_path)
+
+    monkeypatch.setattr(
+        "nightshift.cli.app.resolve_selected_issues",
+        lambda registry, issue_ids: SelectionResult(items=(SelectionItem(issue_id="GH-6", queue_priority="high"),)),
+    )
+
+    def fail_batch(selection, run_one):
+        raise RuntimeError("engine outcome engine_crash cannot be accepted")
+
+    monkeypatch.setattr("nightshift.cli.app.run_batch", fail_batch)
+
+    result = CliRunner().invoke(app, ["run", "--issues", "GH-6", "--config", str(config_path)])
+
+    assert result.exit_code == 1
+    assert "run failed for selected issues" in result.stderr
+    assert "engine outcome engine_crash cannot be accepted" in result.stderr
+    assert "Traceback" not in result.stderr

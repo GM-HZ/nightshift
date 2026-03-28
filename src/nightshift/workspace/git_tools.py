@@ -18,7 +18,22 @@ def git_output(repo_root: str | Path, *args: str) -> str:
 
 
 def git_worktree_add(repo_root: str | Path, worktree_path: str | Path, branch_name: str, base_branch: str) -> None:
-    _run_git(repo_root, "worktree", "add", "-b", branch_name, str(Path(worktree_path)), base_branch)
+    args = ["worktree", "add"]
+    if git_branch_exists(repo_root, branch_name):
+        args.extend([str(Path(worktree_path)), branch_name])
+    else:
+        args.extend(["-b", branch_name, str(Path(worktree_path)), base_branch])
+    _run_git(repo_root, *args)
+
+
+def git_branch_exists(repo_root: str | Path, branch_name: str) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(Path(repo_root)), "show-ref", "--verify", "--quiet", f"refs/heads/{branch_name}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
 
 
 def git_head_sha(worktree_path: str | Path) -> str:

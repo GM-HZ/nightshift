@@ -277,7 +277,14 @@ def run(
         raise typer.Exit(0)
 
     typer.echo(f"selected issues: {', '.join(selection.issue_ids)}")
-    summary = run_batch(selection, orchestrator.run_one)
+    try:
+        summary = run_batch(selection, orchestrator.run_one)
+    except Exception as error:
+        typer.echo(
+            f"run failed for selected issues: {error}. Inspect nightshift-data/runs/ for persisted state and artifacts.",
+            err=True,
+        )
+        raise typer.Exit(1) from error
     typer.echo(summary.model_dump_json(indent=2, exclude_none=True))
 
 

@@ -91,8 +91,10 @@ def make_event(seq: int, run_id: str, event_type: str) -> EventRecord:
 
 def test_resolve_report_run_id_prefers_active_run_then_latest_run(tmp_path: Path) -> None:
     store = StateStore(tmp_path)
-    store.save_run_state(make_run_state("run-20260328T000100Z-a"))
-    store.save_run_state(make_run_state("run-20260328T000200Z-b"))
+    run_a = make_run_state("run-20260328T000100Z-a")
+    run_b = make_run_state("run-20260328T000200Z-b")
+    store.save_run_state(run_a)
+    store.save_run_state(run_b)
     store.set_active_run("run-20260328T000100Z-a")
 
     assert resolve_report_run_id(store, None) == "run-20260328T000100Z-a"
@@ -100,6 +102,28 @@ def test_resolve_report_run_id_prefers_active_run_then_latest_run(tmp_path: Path
     store.set_active_run(None)
 
     assert resolve_report_run_id(store, None) == "run-20260328T000200Z-b"
+
+
+def test_resolve_report_run_id_prefers_latest_started_at_not_lexicographic_run_id(tmp_path: Path) -> None:
+    store = StateStore(tmp_path)
+    older = RunState.model_validate(
+        {
+            **make_run_state("RUN-z-old").model_dump(mode="json"),
+            "started_at": "2026-03-28T00:01:00Z",
+            "ended_at": "2026-03-28T00:02:00Z",
+        }
+    )
+    newer = RunState.model_validate(
+        {
+            **make_run_state("RUN-a-new").model_dump(mode="json"),
+            "started_at": "2026-03-28T00:03:00Z",
+            "ended_at": "2026-03-28T00:04:00Z",
+        }
+    )
+    store.save_run_state(older)
+    store.save_run_state(newer)
+
+    assert resolve_report_run_id(store, None) == "RUN-a-new"
 
 
 def test_build_minimal_report_summarizes_persisted_history(tmp_path: Path) -> None:

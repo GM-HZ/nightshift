@@ -8,6 +8,7 @@ from nightshift.domain.contracts import IssueContract
 from nightshift.store.filesystem import safe_path_component
 
 from .git_tools import (
+    git_current_branch,
     git_clean_untracked,
     git_head_sha,
     git_reset_hard,
@@ -47,7 +48,14 @@ class WorkspaceManager:
         worktree_path = self._worktree_path(issue_id)
 
         worktree_path.parent.mkdir(parents=True, exist_ok=True)
-        git_worktree_add(self.repo_root, worktree_path, branch_name, self.main_branch)
+        if worktree_path.exists():
+            current_branch = git_current_branch(worktree_path)
+            if current_branch != branch_name:
+                raise ValueError(
+                    f"existing worktree for {issue_id} is on branch {current_branch}, expected {branch_name}"
+                )
+        else:
+            git_worktree_add(self.repo_root, worktree_path, branch_name, self.main_branch)
 
         return WorkspaceHandle(issue_id=issue_id, branch_name=branch_name, worktree_path=worktree_path)
 
@@ -64,7 +72,7 @@ class WorkspaceManager:
     def _branch_name(self, issue_id: str, title: str) -> str:
         issue_slug = self._slugify(issue_id) or "issue"
         title_slug = self._slugify(title) or issue_slug
-        return f"nightshift/issue-{issue_slug}-{title_slug}"
+        return f"nightshift-issue-{issue_slug}-{title_slug}"
 
     def _worktree_path(self, issue_id: str) -> Path:
         return self.worktree_root / f"issue-{issue_id}"

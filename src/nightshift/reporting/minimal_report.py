@@ -35,7 +35,8 @@ def resolve_report_run_id(state_store: Any, run_id: str | None) -> str:
     runs = state_store.list_runs()
     if not runs:
         raise ValueError("no runs available for reporting")
-    return runs[-1].run_id
+    latest_run = max(runs, key=lambda run: (run.started_at is not None, run.started_at, run.run_id))
+    return latest_run.run_id
 
 
 def build_minimal_report(state_store: Any, run_id: str | None = None) -> MinimalReport:

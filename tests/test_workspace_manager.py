@@ -72,7 +72,7 @@ def test_workspace_manager_prepares_expected_branch_and_worktree_path(tmp_path: 
 
     workspace = manager.prepare_workspace(make_contract("ISSUE-123", "Add Workspace Manager"))
 
-    assert workspace.branch_name == "nightshift/issue-issue-123-add-workspace-manager"
+    assert workspace.branch_name == "nightshift-issue-issue-123-add-workspace-manager"
     assert workspace.worktree_path == repo / ".nightshift" / "worktrees" / "issue-ISSUE-123"
     assert run_git(workspace.worktree_path, "branch", "--show-current") == workspace.branch_name
 
@@ -83,7 +83,7 @@ def test_workspace_manager_sanitizes_issue_id_for_branch_name(tmp_path: Path) ->
 
     workspace = manager.prepare_workspace(make_contract("ISSUE 123", "Add Workspace Manager"))
 
-    assert workspace.branch_name == "nightshift/issue-issue-123-add-workspace-manager"
+    assert workspace.branch_name == "nightshift-issue-issue-123-add-workspace-manager"
     assert run_git(workspace.worktree_path, "branch", "--show-current") == workspace.branch_name
 
 
@@ -140,3 +140,29 @@ def test_workspace_manager_cleanup_removes_ignored_files(tmp_path: Path) -> None
     manager.cleanup(workspace)
 
     assert not ignored_file.exists()
+
+
+def test_workspace_manager_reuses_existing_worktree_for_same_issue(tmp_path: Path) -> None:
+    repo = init_repo(tmp_path)
+    manager = WorkspaceManager(repo)
+
+    first = manager.prepare_workspace(make_contract("ISSUE-123", "Add Workspace Manager"))
+    second = manager.prepare_workspace(make_contract("ISSUE-123", "Add Workspace Manager"))
+
+    assert second.worktree_path == first.worktree_path
+    assert second.branch_name == first.branch_name
+    assert run_git(second.worktree_path, "branch", "--show-current") == second.branch_name
+
+
+def test_workspace_manager_reattaches_existing_branch_when_worktree_path_is_missing(tmp_path: Path) -> None:
+    repo = init_repo(tmp_path)
+    manager = WorkspaceManager(repo)
+
+    first = manager.prepare_workspace(make_contract("ISSUE-123", "Add Workspace Manager"))
+    run_git(repo, "worktree", "remove", "--force", str(first.worktree_path))
+
+    second = manager.prepare_workspace(make_contract("ISSUE-123", "Add Workspace Manager"))
+
+    assert second.worktree_path == first.worktree_path
+    assert second.branch_name == first.branch_name
+    assert run_git(second.worktree_path, "branch", "--show-current") == second.branch_name
