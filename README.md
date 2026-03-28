@@ -1,5 +1,7 @@
 # NightShift
 
+> Language / 语言：English | [简体中文](README.zh-CN.md)
+
 NightShift is an overnight AI coding harness. This repository now contains both the `v4.2.1` architecture spec set and a Python MVP kernel that can execute a single issue, validate it, recover interrupted runs, and emit a minimal historical report.
 
 ## Current Status
