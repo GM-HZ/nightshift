@@ -31,6 +31,16 @@ class IssueRecord(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @classmethod
+    def from_contract(cls, contract: "IssueContract", **data: Any) -> "IssueRecord":
+        from .contracts import IssueContract
+
+        if not isinstance(contract, IssueContract):
+            raise TypeError("contract must be an IssueContract")
+
+        payload = {"issue_id": contract.issue_id, "queue_priority": contract.priority, **data}
+        return cls.model_validate(payload)
+
     @model_validator(mode="after")
     def validate_delivery_constraints(self) -> "IssueRecord":
         if self.issue_state == IssueState.blocked and not self.blocker_type:
