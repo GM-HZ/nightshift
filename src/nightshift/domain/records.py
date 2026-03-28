@@ -82,6 +82,9 @@ class IssueRecord(BaseModel):
         if self.delivery_state != DeliveryState.none and self.attempt_state != AttemptState.accepted:
             raise ValueError("delivery states require attempt_state to be accepted")
 
+        if self.delivery_state == DeliveryState.branch_ready and not self.branch_name:
+            raise ValueError("branch_ready delivery states require branch_name")
+
         if self.delivery_state in {
             DeliveryState.pr_opened,
             DeliveryState.reviewed,

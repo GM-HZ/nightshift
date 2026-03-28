@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from nightshift.domain import AlertEvent, EventRecord, RunLifecycleState, RunState
 from nightshift.domain.contracts import (
     AttemptLimitsContract,
     EnginePreferencesContract,
@@ -11,8 +12,8 @@ from nightshift.domain.contracts import (
     VerificationContract,
     VerificationStageContract,
 )
-from nightshift.domain.records import IssueRecord
 from nightshift.domain.records import AttemptRecord
+from nightshift.domain.records import IssueRecord
 
 
 def test_issue_contract_rejects_runtime_fields() -> None:
@@ -599,6 +600,43 @@ def test_attempt_record_rejects_blank_engine_name() -> None:
         )
 
 
+def test_domain_package_exports_run_state_record_model() -> None:
+    record = RunState.model_validate(
+        {
+            "run_id": "RUN-1",
+            "run_state": "running",
+        }
+    )
+
+    assert record.run_id == "RUN-1"
+    assert record.run_state == RunLifecycleState.running
+
+
+def test_event_and_alert_models_validate_minimum_payloads() -> None:
+    event = EventRecord.model_validate(
+        {
+            "seq": 1,
+            "run_id": "RUN-1",
+            "event_type": "run.started",
+            "created_at": "2026-03-28T00:00:00Z",
+        }
+    )
+    alert = AlertEvent.model_validate(
+        {
+            "alert_id": "ALERT-1",
+            "run_id": "RUN-1",
+            "severity": "warning",
+            "event_type": "run.degraded",
+            "summary": "Something needs attention",
+            "created_at": "2026-03-28T00:00:00Z",
+            "delivery_status": "pending",
+        }
+    )
+
+    assert event.event_type == "run.started"
+    assert alert.summary == "Something needs attention"
+
+
 def test_issue_record_exposes_delivery_fields() -> None:
     record = IssueRecord.model_validate(
         {
@@ -703,3 +741,21 @@ def test_issue_record_rejects_pr_opened_without_delivery_reference() -> None:
         )
 
     assert "delivery_id or delivery_ref" in str(exc_info.value)
+
+
+def test_issue_record_rejects_branch_ready_without_branch_name() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "done",
+                "attempt_state": "accepted",
+                "delivery_state": "branch_ready",
+                "accepted_attempt_id": "ATT-1",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "branch_ready delivery states require branch_name" in str(exc_info.value)
