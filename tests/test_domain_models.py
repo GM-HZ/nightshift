@@ -248,7 +248,7 @@ def test_execution_contract_rejects_empty_verification() -> None:
 
 
 def test_attempt_record_requires_validation_pass_for_accepted() -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc_info:
         AttemptRecord.model_validate(
             {
                 "attempt_id": "ATT-1",
@@ -258,14 +258,14 @@ def test_attempt_record_requires_validation_pass_for_accepted() -> None:
                 "engine_invocation_id": "INV-1",
                 "attempt_state": "accepted",
                 "validation_result": {"passed": False},
-                "created_at": "2026-03-28T00:00:00Z",
-                "updated_at": "2026-03-28T00:00:00Z",
             }
         )
 
+    assert "accepted attempts require a passing validation_result" in str(exc_info.value)
+
 
 def test_attempt_record_requires_preflight_failed_to_be_false() -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc_info:
         AttemptRecord.model_validate(
             {
                 "attempt_id": "ATT-1",
@@ -275,10 +275,10 @@ def test_attempt_record_requires_preflight_failed_to_be_false() -> None:
                 "engine_invocation_id": "INV-1",
                 "attempt_state": "preflight_failed",
                 "preflight_passed": True,
-                "created_at": "2026-03-28T00:00:00Z",
-                "updated_at": "2026-03-28T00:00:00Z",
             }
         )
+
+    assert "preflight_failed attempts require preflight_passed to be False" in str(exc_info.value)
 
 
 def test_issue_record_exposes_delivery_fields() -> None:
