@@ -30,6 +30,8 @@ def make_contract(
     issue_validation: VerificationStageContract | None,
     regression_validation: VerificationStageContract | None,
     static_validation: VerificationStageContract | None = None,
+    promotion_validation: VerificationStageContract | None = None,
+    command_seconds: int | None = None,
 ) -> IssueContract:
     return IssueContract(
         issue_id="ISSUE-1",
@@ -43,6 +45,7 @@ def make_contract(
             issue_validation=issue_validation,
             regression_validation=regression_validation,
             static_validation=static_validation,
+            promotion_validation=promotion_validation,
         ),
         test_edit_policy=TestEditPolicyContract(
             can_add_tests=True,
@@ -51,7 +54,7 @@ def make_contract(
             requires_test_change_reason=True,
         ),
         attempt_limits=AttemptLimitsContract(),
-        timeouts=TimeoutsContract(),
+        timeouts=TimeoutsContract(command_seconds=command_seconds),
     )
 
 
@@ -118,10 +121,12 @@ def test_validation_gate_allows_optional_static_validation_to_fail_without_block
         "issue_validation",
         "regression_validation",
         "static_validation",
+        "promotion_validation",
     ]
     assert result.stages[2].required is False
     assert result.stages[2].passed is False
     assert result.stages[2].skipped is False
+    assert result.stages[3].skipped is True
 
 
 def test_validation_gate_honors_pass_conditions() -> None:
@@ -140,6 +145,64 @@ def test_validation_gate_honors_pass_conditions() -> None:
     assert result.failed_stage == "issue_validation"
     assert result.stages[0].passed is False
     assert result.stages[0].command_results[0].exit_code == 1
+
+
+def test_validation_gate_requires_promotion_validation() -> None:
+    contract = make_contract(
+        issue_validation=make_stage("python3 -c \"print('issue')\"", required=True),
+        regression_validation=make_stage("python3 -c \"print('regression')\"", required=True),
+        promotion_validation=VerificationStageContract(
+            required=True,
+            commands=("python3 -c \"import sys; sys.exit(1)\"",),
+            pass_condition=PassConditionContract(type="exit_code", expected=0),
+        ),
+    )
+
+    result = validate(contract, Path("."), make_attempt_record())
+
+    assert result.passed is False
+    assert result.failed_stage == "promotion_validation"
+    assert result.stages[-1].stage_name == "promotion_validation"
+    assert result.stages[-1].passed is False
+
+
+def test_validation_gate_handles_spawn_failures_as_stage_failures() -> None:
+    contract = make_contract(
+        issue_validation=VerificationStageContract(
+            required=True,
+            commands=("definitely-not-a-real-command",),
+            pass_condition=PassConditionContract(type="exit_code", expected=0),
+        ),
+        regression_validation=make_stage("python3 -c \"print('regression')\"", required=True),
+    )
+
+    result = validate(contract, Path("."), make_attempt_record())
+
+    assert result.passed is False
+    assert result.failed_stage == "issue_validation"
+    assert result.stages[0].command_results[0].exit_code == -1
+    assert result.stages[0].command_results[0].passed is False
+    assert result.stages[0].command_results[0].stderr != ""
+
+
+def test_validation_gate_enforces_command_timeout() -> None:
+    contract = make_contract(
+        issue_validation=VerificationStageContract(
+            required=True,
+            commands=("python3 -c \"import time; time.sleep(2)\"",),
+            pass_condition=PassConditionContract(type="exit_code", expected=0),
+        ),
+        regression_validation=make_stage("python3 -c \"print('regression')\"", required=True),
+        command_seconds=1,
+    )
+
+    result = validate(contract, Path("."), make_attempt_record())
+
+    assert result.passed is False
+    assert result.failed_stage == "issue_validation"
+    assert result.stages[0].command_results[0].exit_code == -1
+    assert result.stages[0].command_results[0].passed is False
+    assert "timed out" in result.stages[0].command_results[0].stderr.lower()
 
 
 def test_evaluate_acceptance_returns_passed_flag() -> None:

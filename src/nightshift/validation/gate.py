@@ -44,19 +44,35 @@ def validate(issue_contract: IssueContract, workspace: object, attempt_record: A
 
     workspace_path = _workspace_path(workspace)
     stages: list[ValidationStageResult] = []
+    command_timeout = issue_contract.timeouts.command_seconds
 
-    issue_stage = _run_stage("issue_validation", issue_contract.verification.issue_validation, workspace_path)
+    issue_stage = _run_stage("issue_validation", issue_contract.verification.issue_validation, workspace_path, command_timeout)
     stages.append(issue_stage)
     if issue_stage.required and not issue_stage.passed:
         return _failure_result("issue_validation", stages)
 
-    regression_stage = _run_stage("regression_validation", issue_contract.verification.regression_validation, workspace_path)
+    regression_stage = _run_stage(
+        "regression_validation",
+        issue_contract.verification.regression_validation,
+        workspace_path,
+        command_timeout,
+    )
     stages.append(regression_stage)
     if regression_stage.required and not regression_stage.passed:
         return _failure_result("regression_validation", stages)
 
-    static_stage = _run_stage("static_validation", issue_contract.verification.static_validation, workspace_path)
+    static_stage = _run_stage("static_validation", issue_contract.verification.static_validation, workspace_path, command_timeout)
     stages.append(static_stage)
+
+    promotion_stage = _run_stage(
+        "promotion_validation",
+        issue_contract.verification.promotion_validation,
+        workspace_path,
+        command_timeout,
+    )
+    stages.append(promotion_stage)
+    if promotion_stage.required and not promotion_stage.passed:
+        return _failure_result("promotion_validation", stages)
 
     summary = "validation passed"
     if any(not stage.passed and not stage.required for stage in stages):
@@ -78,6 +94,7 @@ def _run_stage(
     stage_name: str,
     stage: VerificationStageContract | None,
     workspace_path: Path,
+    command_timeout: int | None,
 ) -> ValidationStageResult:
     if stage is None:
         required = stage_name in {"issue_validation", "regression_validation"}
@@ -102,18 +119,12 @@ def _run_stage(
 
     command_results: list[CommandResult] = []
     for command in stage.commands:
-        completed = subprocess.run(
-            shlex.split(command),
-            cwd=workspace_path,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        passed = _command_passed(completed.returncode, stage.pass_condition)
+        completed = _run_command(command, workspace_path, command_timeout)
+        passed = _command_passed(completed.exit_code, stage.pass_condition)
         command_results.append(
             CommandResult(
                 command=command,
-                exit_code=completed.returncode,
+                exit_code=completed.exit_code,
                 passed=passed,
                 stdout=completed.stdout,
                 stderr=completed.stderr,
@@ -142,6 +153,42 @@ def _command_passed(exit_code: int, pass_condition: PassConditionContract | None
         return exit_code == 0
 
     return False
+
+
+def _run_command(command: str, workspace_path: Path, command_timeout: int | None) -> CommandResult:
+    try:
+        completed = subprocess.run(
+            shlex.split(command),
+            cwd=workspace_path,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=command_timeout,
+        )
+    except subprocess.TimeoutExpired as error:
+        return CommandResult(
+            command=command,
+            exit_code=-1,
+            passed=False,
+            stdout=error.stdout or "",
+            stderr=(error.stderr or "") + f"Command timed out after {command_timeout} seconds",
+        )
+    except OSError as error:
+        return CommandResult(
+            command=command,
+            exit_code=-1,
+            passed=False,
+            stdout="",
+            stderr=str(error),
+        )
+
+    return CommandResult(
+        command=command,
+        exit_code=completed.returncode,
+        passed=False,
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+    )
 
 
 def _failure_result(failed_stage: str, stages: list[ValidationStageResult]) -> ValidationResult:
