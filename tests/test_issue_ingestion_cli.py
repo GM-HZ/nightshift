@@ -150,3 +150,56 @@ def test_issue_ingest_github_reports_provenance_rejection(tmp_path: Path, monkey
     assert result.exit_code == 1
     assert "provenance rejected: author external-user is not allowlisted" in result.stderr
     assert not (tmp_path / "nightshift" / "issues" / "GH-2.yaml").exists()
+
+
+def test_issue_ingest_github_materialize_only_creates_non_admitted_record(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    _write_config(config_path, tmp_path)
+
+    monkeypatch.setattr(
+        "nightshift.cli.app.fetch_github_issue",
+        lambda repo_full_name, issue_number: GitHubIssue(
+            repo_full_name=repo_full_name,
+            issue_number=issue_number,
+            title="Add zh-CN README",
+            author_login="nightshift-bot",
+            labels=("nightshift", "docs"),
+            body="""
+NightShift-Issue: true
+NightShift-Version: product-mvp
+
+## Goal
+Add a Chinese-language README entry point.
+
+## Allowed Paths
+- README.md
+
+## Acceptance Criteria
+- Chinese README exists
+
+## Verification Commands
+- python3 -m pytest tests/test_cli_smoke.py -q
+""",
+        ),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "issue",
+            "ingest-github",
+            "--repo-full-name",
+            "GM-HZ/nightshift",
+            "--issue",
+            "3",
+            "--materialize-only",
+            "--config",
+            str(config_path),
+        ],
+    )
+
+    record_path = tmp_path / "nightshift-data" / "issue-records" / "GH-3.json"
+
+    assert result.exit_code == 0
+    assert "issue_state=draft attempt_state=pending" in result.stdout
+    assert '"issue_state": "draft"' in record_path.read_text()

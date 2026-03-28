@@ -57,15 +57,18 @@ Current product-slice design docs:
 
 - `docs/architecture/product/issue-ingestion-mvp.md`
 - `docs/architecture/product/execution-selection-mvp.md`
+- `docs/architecture/product/queue-admission-mvp.md`
 
 Current product-slice implementation status:
 
 - `issue ingest-github` now exists as the first product-layer bridge into the kernel
 - it currently supports one GitHub issue at a time
 - it enforces provenance and admission before writing `IssueContract` and `IssueRecord`
+- `issue ingest-github --materialize-only` now supports review-first materialization
+- `queue add` now explicitly admits local issues into the live queue
 - `run --issues` and `run --all` now exist for sequential fail-fast batch execution
 - batch execution currently reuses kernel `run-one` and current queue ordering
-- richer intake flow such as splitter-driven issue creation, proposal review UX, and batch admission still remain future work
+- richer intake flow such as splitter-driven issue creation and proposal review UX still remain future work
 
 ## Current Next-Step Theme
 

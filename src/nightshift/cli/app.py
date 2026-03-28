@@ -17,6 +17,7 @@ from nightshift.product.issue_ingestion import (
     materialize_issue,
     parse_github_issue_template,
 )
+from nightshift.product.queue_admission import admit_to_queue
 from nightshift.registry.issue_registry import IssueRegistry
 from nightshift.reporting.minimal_report import build_minimal_report
 from nightshift.store.state_store import StateStore
@@ -217,10 +218,35 @@ def queue_reprioritize(
     typer.echo(f"{updated.issue_id} queue_priority={updated.queue_priority}")
 
 
+@queue_app.command("add")
+def queue_add(
+    issue_ids: list[str] = typer.Argument(...),
+    priority: str | None = typer.Option(None, "--priority"),
+    repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    config: Path = typer.Option(..., "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+) -> None:
+    loaded_config = load_config(config)
+    repo_root = _resolve_repo_root(repo, loaded_config)
+    issue_registry = build_issue_registry(repo_root)
+
+    try:
+        result = admit_to_queue(issue_registry, issue_ids, priority=priority)
+    except ValueError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(1) from error
+
+    for status in result.statuses:
+        typer.echo(f"{status.issue_id} status={status.status} queue_priority={status.queue_priority}")
+    typer.echo(
+        f"requested={result.summary.requested} admitted={result.summary.admitted} already_admitted={result.summary.already_admitted}"
+    )
+
+
 @issue_app.command("ingest-github")
 def issue_ingest_github(
     repo_full_name: str = typer.Option(..., "--repo-full-name"),
     issue: int = typer.Option(..., "--issue"),
+    materialize_only: bool = typer.Option(False, "--materialize-only"),
     repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
     config: Path = typer.Option(..., "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
 ) -> None:
@@ -241,7 +267,7 @@ def issue_ingest_github(
             typer.echo(f"admission rejected: {reason}", err=True)
         raise typer.Exit(1)
 
-    contract, record = materialize_issue(repo_root, admission.draft, loaded_config)
+    contract, record = materialize_issue(repo_root, admission.draft, loaded_config, queue_admitted=not materialize_only)
     typer.echo(
         f"ingested {contract.issue_id} from {repo_full_name}#{issue} "
         f"issue_state={record.issue_state} attempt_state={record.attempt_state}"

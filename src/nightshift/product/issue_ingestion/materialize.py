@@ -24,10 +24,12 @@ def materialize_issue(
     repo_root: str | Path,
     draft: AdmittedIssueDraft,
     config: NightShiftConfig,
+    *,
+    queue_admitted: bool = True,
 ) -> tuple[IssueContract, IssueRecord]:
     registry = IssueRegistry(repo_root)
     contract = _build_contract(draft, config)
-    record = _build_record(contract)
+    record = _build_record(contract, queue_admitted=queue_admitted)
     registry.save_contract(contract)
     registry.save_record(record)
     return contract, record
@@ -62,11 +64,11 @@ def _build_contract(draft: AdmittedIssueDraft, config: NightShiftConfig) -> Issu
     )
 
 
-def _build_record(contract: IssueContract) -> IssueRecord:
+def _build_record(contract: IssueContract, *, queue_admitted: bool) -> IssueRecord:
     now = datetime.now(timezone.utc)
     return IssueRecord.from_contract(
         contract,
-        issue_state=IssueState.ready,
+        issue_state=IssueState.ready if queue_admitted else IssueState.draft,
         attempt_state=AttemptState.pending,
         delivery_state=DeliveryState.none,
         created_at=now,
