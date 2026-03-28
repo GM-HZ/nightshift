@@ -47,16 +47,16 @@ TestEditPolicyConfig.__test__ = False
 class AttemptLimitsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    max_files_changed: NonNegativeInt | None = None
-    max_lines_added: NonNegativeInt | None = None
-    max_lines_deleted: NonNegativeInt | None = None
+    max_files_changed: NonNegativeInt
+    max_lines_added: NonNegativeInt
+    max_lines_deleted: NonNegativeInt
 
 
 class TimeoutsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    command_seconds: PositiveInt | None = None
-    issue_budget_seconds: PositiveInt | None = None
+    command_seconds: PositiveInt
+    issue_budget_seconds: PositiveInt
 
 
 class IssueDefaultsConfig(BaseModel):
