@@ -211,3 +211,19 @@ def test_state_store_ignores_truncated_alert_lines(tmp_path: Path) -> None:
     )
 
     assert [alert.alert_id for alert in store.read_alerts()] == ["ALERT-1"]
+
+
+def test_state_store_rejects_path_traversal_identifiers(tmp_path: Path) -> None:
+    store = StateStore(tmp_path)
+
+    with pytest.raises(ValueError):
+        store.save_run_state(make_run_state("../run-1"))
+
+    with pytest.raises(ValueError):
+        store.save_run_issue_snapshot("../run-1", make_issue_record("ISSUE-1"))
+
+    with pytest.raises(ValueError):
+        store.list_attempt_records("../run-1")
+
+    with pytest.raises(ValueError):
+        store.save_attempt_record(make_attempt_record("../ATT-1", "ISSUE-1", "run-1"))

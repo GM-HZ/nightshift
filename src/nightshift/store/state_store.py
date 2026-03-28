@@ -5,7 +5,15 @@ from pathlib import Path
 from nightshift.domain import AlertEvent, AttemptRecord, EventRecord, RunState
 from nightshift.domain.enums import AlertSeverity
 from nightshift.domain.records import IssueRecord
-from nightshift.store.filesystem import append_ndjson, read_json, read_model_json, read_ndjson, write_json, write_model_json
+from nightshift.store.filesystem import (
+    append_ndjson,
+    read_json,
+    read_model_json,
+    read_ndjson,
+    safe_path_component,
+    write_json,
+    write_model_json,
+)
 
 
 class StateStore:
@@ -106,19 +114,24 @@ class StateStore:
         return self.root / "nightshift-data" / "runs"
 
     def _run_state_path(self, run_id: str) -> Path:
-        return self._runs_dir() / run_id / "run-state.json"
+        safe_run_id = safe_path_component(run_id, field_name="run_id")
+        return self._runs_dir() / safe_run_id / "run-state.json"
 
     def _issues_dir(self, run_id: str) -> Path:
-        return self._runs_dir() / run_id / "issues"
+        safe_run_id = safe_path_component(run_id, field_name="run_id")
+        return self._runs_dir() / safe_run_id / "issues"
 
     def _issue_snapshot_path(self, run_id: str, issue_id: str) -> Path:
-        return self._issues_dir(run_id) / f"{issue_id}.json"
+        safe_issue_id = safe_path_component(issue_id, field_name="issue_id")
+        return self._issues_dir(run_id) / f"{safe_issue_id}.json"
 
     def _attempts_dir(self, run_id: str) -> Path:
-        return self._runs_dir() / run_id / "attempts"
+        safe_run_id = safe_path_component(run_id, field_name="run_id")
+        return self._runs_dir() / safe_run_id / "attempts"
 
     def _attempt_path(self, run_id: str, attempt_id: str) -> Path:
-        return self._attempts_dir(run_id) / f"{attempt_id}.json"
+        safe_attempt_id = safe_path_component(attempt_id, field_name="attempt_id")
+        return self._attempts_dir(run_id) / f"{safe_attempt_id}.json"
 
     def _attempt_paths(self) -> list[Path]:
         if not self._runs_dir().exists():
@@ -132,7 +145,8 @@ class StateStore:
         return paths
 
     def _events_path(self, run_id: str) -> Path:
-        return self._runs_dir() / run_id / "events.ndjson"
+        safe_run_id = safe_path_component(run_id, field_name="run_id")
+        return self._runs_dir() / safe_run_id / "events.ndjson"
 
     def _alerts_path(self) -> Path:
         return self.root / "nightshift-data" / "alerts.ndjson"

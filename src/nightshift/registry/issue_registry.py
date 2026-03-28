@@ -6,7 +6,13 @@ from pathlib import Path
 from nightshift.domain import AttemptState, DeliveryState, IssueKind, IssueState
 from nightshift.domain.contracts import IssueContract
 from nightshift.domain.records import IssueRecord
-from nightshift.store.filesystem import read_model_yaml, write_model_yaml, read_model_json, write_model_json
+from nightshift.store.filesystem import (
+    read_model_json,
+    read_model_yaml,
+    safe_path_component,
+    write_model_json,
+    write_model_yaml,
+)
 
 
 class IssueRegistry:
@@ -94,10 +100,12 @@ class IssueRegistry:
         return self.root / "nightshift-data" / "issue-records"
 
     def _contract_path(self, issue_id: str) -> Path:
-        return self._contracts_dir() / f"{issue_id}.yaml"
+        safe_issue_id = safe_path_component(issue_id, field_name="issue_id")
+        return self._contracts_dir() / f"{safe_issue_id}.yaml"
 
     def _record_path(self, issue_id: str) -> Path:
-        return self._records_dir() / f"{issue_id}.json"
+        safe_issue_id = safe_path_component(issue_id, field_name="issue_id")
+        return self._records_dir() / f"{safe_issue_id}.json"
 
     def _validated_update(self, issue_id: str, update: dict[str, object]) -> IssueRecord:
         record = self.get_record(issue_id)

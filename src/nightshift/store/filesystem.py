@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-from tempfile import NamedTemporaryFile
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any, TypeVar
 
 import yaml
@@ -13,6 +13,12 @@ T = TypeVar("T", bound=BaseModel)
 
 def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def safe_path_component(value: str, *, field_name: str) -> str:
+    if value in {"", ".", ".."} or "/" in value or "\\" in value or Path(value).name != value:
+        raise ValueError(f"{field_name} must be a single safe path component")
+    return value
 
 
 def read_json(path: Path) -> Any:

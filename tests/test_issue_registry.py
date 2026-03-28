@@ -248,3 +248,13 @@ def test_issue_registry_rejects_invalid_attach_delivery(tmp_path: Path) -> None:
         registry.attach_delivery("ISSUE-1", DeliveryState.branch_ready, delivery_id="PR-1")
 
     assert registry.get_record("ISSUE-1") == record
+
+
+def test_issue_registry_rejects_path_traversal_issue_ids(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+
+    with pytest.raises(ValueError):
+        registry.save_contract(make_contract("../ISSUE-1"))
+
+    with pytest.raises(ValueError):
+        registry.save_record(make_record("../ISSUE-1"))
