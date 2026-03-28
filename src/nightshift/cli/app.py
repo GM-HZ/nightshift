@@ -9,6 +9,7 @@ from nightshift.engines.claude_code_adapter import ClaudeCodeAdapter
 from nightshift.engines.registry import EngineRegistry
 from nightshift.orchestrator import RunOrchestrator
 from nightshift.orchestrator.recovery import RecoveryOrchestrator
+from nightshift.product.execution_selection import resolve_all_schedulable_issues, resolve_selected_issues, run_batch
 from nightshift.product.issue_ingestion import (
     check_issue_admission,
     check_issue_provenance,
@@ -108,6 +109,39 @@ def run_one(
         raise typer.Exit(1) from error
     status = "accepted" if result.accepted else "rejected"
     typer.echo(f"{result.issue_id} {status} in {result.run_id} ({result.attempt_id})")
+
+
+@app.command("run")
+def run(
+    issues: str | None = typer.Option(None, "--issues"),
+    run_all: bool = typer.Option(False, "--all"),
+    repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    config: Path = typer.Option(..., "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+) -> None:
+    if bool(issues) == bool(run_all):
+        raise typer.BadParameter("specify exactly one of --issues or --all")
+
+    loaded_config = load_config(config)
+    repo_root = _resolve_repo_root(repo, loaded_config)
+    issue_registry = build_issue_registry(repo_root)
+    orchestrator = build_run_orchestrator(repo_root, loaded_config)
+
+    try:
+        if issues:
+            selection = resolve_selected_issues(issue_registry, issues.split(","))
+        else:
+            selection = resolve_all_schedulable_issues(issue_registry)
+    except ValueError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(1) from error
+
+    if not selection.items:
+        typer.echo("no schedulable issues selected")
+        raise typer.Exit(0)
+
+    typer.echo(f"selected issues: {', '.join(selection.issue_ids)}")
+    summary = run_batch(selection, orchestrator.run_one)
+    typer.echo(summary.model_dump_json(indent=2, exclude_none=True))
 
 
 @app.command("recover")

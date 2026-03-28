@@ -56,17 +56,20 @@ The main design references for the product workflow side are:
 Current product-slice design docs:
 
 - `docs/architecture/product/issue-ingestion-mvp.md`
+- `docs/architecture/product/execution-selection-mvp.md`
 
 Current product-slice implementation status:
 
 - `issue ingest-github` now exists as the first product-layer bridge into the kernel
 - it currently supports one GitHub issue at a time
 - it enforces provenance and admission before writing `IssueContract` and `IssueRecord`
+- `run --issues` and `run --all` now exist for sequential fail-fast batch execution
+- batch execution currently reuses kernel `run-one` and current queue ordering
 - richer intake flow such as splitter-driven issue creation, proposal review UX, and batch admission still remain future work
 
 ## Current Next-Step Theme
 
-The next meaningful step above the kernel is expanding the current minimal issue-ingestion path so it can turn external requests into:
+The next meaningful step above the kernel is expanding the current intake-plus-selection path so it can turn external requests into:
 
 - immutable `IssueContract`
 - current `IssueRecord`
