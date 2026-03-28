@@ -2,6 +2,8 @@
 
 This section describes the parts of NightShift that sit above the kernel and are not yet complete in the current repository.
 
+It should be read as the current product-layer planning boundary, not as a final code-layout commitment.
+
 ## Product Workflow Status
 
 The broader product workflow is not yet fully implemented.
@@ -9,6 +11,8 @@ The broader product workflow is not yet fully implemented.
 The kernel can already execute approved work once an execution-ready issue exists.
 
 What is still missing is the workflow around getting work into the kernel and delivering the result back out.
+
+This is the area where the architecture is still expected to evolve the most.
 
 ## What Belongs To Product Workflow
 
@@ -22,6 +26,10 @@ These areas are outside the stable kernel boundary in `v4.2.1`:
 - notifications
 - richer reporting
 - PR dispatcher and delivery automation
+
+These items are grouped here as the current product-work boundary for planning purposes.
+
+That grouping may still be refined as implementation work exposes better seams.
 
 ## Important Boundary
 

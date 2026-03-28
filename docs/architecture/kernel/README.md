@@ -2,6 +2,8 @@
 
 This section describes the NightShift kernel as it is defined in `v4.2.1` and as it exists in the current repository.
 
+It is intentionally a boundary description, not a claim that the current source tree is already physically organized as a dedicated `kernel/` package.
+
 ## Kernel Status
 
 The kernel is treated as implemented and verified.
@@ -11,6 +13,8 @@ That statement means:
 - the stable kernel modules from `v4.2.1` exist in code
 - the supporting persistence and workspace layers required by the kernel also exist
 - the kernel has passed both automated verification and real operator-style rehearsal within its current scope
+
+This status is about capability and verification, not about final directory structure.
 
 ## What Counts As The Kernel
 
@@ -25,6 +29,10 @@ Supporting infrastructure that is required for the kernel to function:
 
 - Workspace Manager
 - State Store
+
+This should be read as the current architectural ownership boundary for the repository.
+
+It should not yet be read as a promise that every current module placement is final.
 
 ## What The Kernel Can Do Today
 
