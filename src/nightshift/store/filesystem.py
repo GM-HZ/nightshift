@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from tempfile import NamedTemporaryFile
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -20,7 +21,7 @@ def read_json(path: Path) -> Any:
 
 def write_json(path: Path, payload: Any) -> None:
     ensure_parent(path)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+    _atomic_write_text(path, json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
 
 
 def read_yaml(path: Path) -> Any:
@@ -29,7 +30,7 @@ def read_yaml(path: Path) -> Any:
 
 def write_yaml(path: Path, payload: Any) -> None:
     ensure_parent(path)
-    path.write_text(yaml.safe_dump(payload, sort_keys=False))
+    _atomic_write_text(path, yaml.safe_dump(payload, sort_keys=False))
 
 
 def append_ndjson(path: Path, payload: Any) -> None:
@@ -42,7 +43,15 @@ def read_ndjson(path: Path) -> list[Any]:
     if not path.exists():
         return []
 
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    payloads: list[Any] = []
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            payloads.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return payloads
 
 
 def write_model_json(path: Path, model: BaseModel) -> None:
@@ -60,3 +69,18 @@ def write_model_yaml(path: Path, model: BaseModel) -> None:
 def read_model_yaml(path: Path, model_type: type[T]) -> T:
     return model_type.model_validate(read_yaml(path))
 
+
+def _atomic_write_text(path: Path, contents: str) -> None:
+    ensure_parent(path)
+    temp_path: Path | None = None
+    with NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+        handle.write(contents)
+        handle.flush()
+        temp_path = Path(handle.name)
+
+    try:
+        temp_path.replace(path)
+    except Exception:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise

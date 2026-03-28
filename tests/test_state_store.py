@@ -1,9 +1,13 @@
+import json
 from pathlib import Path
+
+import pytest
 
 from nightshift.domain import AlertEvent, AttemptRecord, EventRecord, IssueState
 from nightshift.domain.enums import RunState as RunLifecycleState
 from nightshift.domain.records import IssueRecord, RunState as RunStateRecord
 from nightshift.store.state_store import StateStore
+from nightshift.store.filesystem import write_json
 
 
 def make_issue_record(issue_id: str, *, issue_state: IssueState = IssueState.ready) -> IssueRecord:
@@ -94,6 +98,25 @@ def test_state_store_saves_and_loads_run_state(tmp_path: Path) -> None:
     assert (tmp_path / "nightshift-data" / "runs" / "run-1" / "run-state.json").is_file()
 
 
+def test_write_json_is_atomicish(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    target = tmp_path / "payload.json"
+    target.write_text('{"original": true}\n')
+    original = target.read_text()
+    calls: list[tuple[str, str]] = []
+
+    def fake_replace(self: Path, destination: Path) -> Path:
+        calls.append((str(self), str(destination)))
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(Path, "replace", fake_replace, raising=False)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        write_json(target, {"new": "value"})
+
+    assert target.read_text() == original
+    assert calls
+
+
 def test_state_store_lists_runs(tmp_path: Path) -> None:
     store = StateStore(tmp_path)
     store.save_run_state(make_run_state("run-2"))
@@ -146,6 +169,23 @@ def test_state_store_appends_and_reads_events(tmp_path: Path) -> None:
     assert [event.seq for event in store.read_events("run-1", since_seq=2)] == [2]
 
 
+def test_state_store_ignores_truncated_event_lines(tmp_path: Path) -> None:
+    store = StateStore(tmp_path)
+    events_path = tmp_path / "nightshift-data" / "runs" / "run-1" / "events.ndjson"
+    events_path.parent.mkdir(parents=True, exist_ok=True)
+    events_path.write_text(
+        "\n".join(
+            [
+                json.dumps(make_event(1, "run-1").model_dump(mode="json")),
+                '{"seq": 2, "run_id": "run-1"',
+            ]
+        )
+        + "\n"
+    )
+
+    assert [event.seq for event in store.read_events("run-1")] == [1]
+
+
 def test_state_store_appends_and_reads_alerts(tmp_path: Path) -> None:
     store = StateStore(tmp_path)
     store.append_alert(make_alert("ALERT-1", "run-1", issue_id="ISSUE-1", severity="warning"))
@@ -154,3 +194,20 @@ def test_state_store_appends_and_reads_alerts(tmp_path: Path) -> None:
     assert [alert.alert_id for alert in store.read_alerts(run_id="run-1")] == ["ALERT-1"]
     assert [alert.alert_id for alert in store.read_alerts(issue_id="ISSUE-1")] == ["ALERT-1", "ALERT-2"]
     assert [alert.alert_id for alert in store.read_alerts(severity="critical")] == ["ALERT-2"]
+
+
+def test_state_store_ignores_truncated_alert_lines(tmp_path: Path) -> None:
+    store = StateStore(tmp_path)
+    alerts_path = tmp_path / "nightshift-data" / "alerts.ndjson"
+    alerts_path.parent.mkdir(parents=True, exist_ok=True)
+    alerts_path.write_text(
+        "\n".join(
+            [
+                json.dumps(make_alert("ALERT-1", "run-1").model_dump(mode="json")),
+                '{"alert_id": "ALERT-2", "run_id": "run-1"',
+            ]
+        )
+        + "\n"
+    )
+
+    assert [alert.alert_id for alert in store.read_alerts()] == ["ALERT-1"]

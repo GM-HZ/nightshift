@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from nightshift.domain import DeliveryState, IssueKind, IssueState, AttemptState
 from nightshift.domain.contracts import (
@@ -14,6 +15,7 @@ from nightshift.domain.contracts import (
 )
 from nightshift.domain.records import IssueRecord
 from nightshift.registry.issue_registry import IssueRegistry
+from nightshift.store.filesystem import write_yaml
 
 
 def make_contract(issue_id: str, kind: IssueKind = IssueKind.planning, priority: str = "high") -> IssueContract:
@@ -82,6 +84,40 @@ def test_issue_registry_saves_and_loads_contract(tmp_path: Path) -> None:
     assert (tmp_path / "nightshift" / "issues" / "ISSUE-1.yaml").is_file()
 
 
+def test_write_yaml_is_atomicish(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    target = tmp_path / "nightshift" / "issues" / "ISSUE-1.yaml"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("title: original\n")
+    original = target.read_text()
+    calls: list[tuple[str, str]] = []
+
+    def fake_replace(self: Path, destination: Path) -> Path:
+        calls.append((str(self), str(destination)))
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(Path, "replace", fake_replace, raising=False)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        write_yaml(target, {"title": "updated"})
+
+    assert target.read_text() == original
+    assert calls
+
+
+def test_issue_registry_rejects_contract_overwrite_with_different_content(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    original = make_contract("ISSUE-1", priority="high")
+    updated = make_contract("ISSUE-1", priority="urgent")
+
+    registry.save_contract(original)
+    registry.save_contract(original)
+
+    with pytest.raises((ValueError, FileExistsError)):
+        registry.save_contract(updated)
+
+    assert registry.get_contract("ISSUE-1") == original
+
+
 def test_issue_registry_lists_contracts_by_kind(tmp_path: Path) -> None:
     registry = IssueRegistry(tmp_path)
     planning = make_contract("ISSUE-1", kind=IssueKind.planning)
@@ -129,6 +165,17 @@ def test_issue_registry_updates_queue_priority_without_changing_contract_priorit
     assert registry.get_contract("ISSUE-1").priority == "medium"
 
 
+def test_issue_registry_rejects_invalid_queue_priority_update(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    record = make_record("ISSUE-1")
+    registry.save_record(record)
+
+    with pytest.raises(ValidationError):
+        registry.set_queue_priority("ISSUE-1", "   ")
+
+    assert registry.get_record("ISSUE-1") == record
+
+
 def test_issue_registry_attaches_attempt(tmp_path: Path) -> None:
     registry = IssueRegistry(tmp_path)
     registry.save_record(make_record("ISSUE-1"))
@@ -139,6 +186,25 @@ def test_issue_registry_attaches_attempt(tmp_path: Path) -> None:
     assert updated.current_run_id == "RUN-1"
     assert updated.attempt_state == AttemptState.executing
     assert updated.issue_state == IssueState.running
+
+
+def test_issue_registry_rejects_invalid_attach_attempt(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    record = make_record(
+        "ISSUE-1",
+        issue_state=IssueState.done,
+        attempt_state=AttemptState.accepted,
+        delivery_state=DeliveryState.branch_ready,
+        accepted_attempt_id="ATT-0",
+        branch_name="feature/issue-1",
+        delivery_id="PR-1",
+    )
+    registry.save_record(record)
+
+    with pytest.raises(ValidationError):
+        registry.attach_attempt("ISSUE-1", "ATT-1", AttemptState.executing, "RUN-1")
+
+    assert registry.get_record("ISSUE-1") == record
 
 
 def test_issue_registry_attaches_delivery(tmp_path: Path) -> None:
@@ -165,3 +231,20 @@ def test_issue_registry_attaches_delivery(tmp_path: Path) -> None:
     assert updated.delivery_id == "PR-1"
     assert updated.delivery_ref == "refs/pull/1"
     assert registry.get_record("ISSUE-1").delivery_state == DeliveryState.branch_ready
+
+
+def test_issue_registry_rejects_invalid_attach_delivery(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    record = make_record(
+        "ISSUE-1",
+        issue_state=IssueState.done,
+        attempt_state=AttemptState.accepted,
+        delivery_state=DeliveryState.none,
+        accepted_attempt_id="ATT-1",
+    )
+    registry.save_record(record)
+
+    with pytest.raises(ValidationError):
+        registry.attach_delivery("ISSUE-1", DeliveryState.branch_ready, delivery_id="PR-1")
+
+    assert registry.get_record("ISSUE-1") == record

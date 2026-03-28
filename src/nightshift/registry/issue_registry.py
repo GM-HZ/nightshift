@@ -14,7 +14,14 @@ class IssueRegistry:
         self.root = Path(root)
 
     def save_contract(self, issue_contract: IssueContract) -> None:
-        write_model_yaml(self._contract_path(issue_contract.issue_id), issue_contract)
+        path = self._contract_path(issue_contract.issue_id)
+        if path.exists():
+            existing = read_model_yaml(path, IssueContract)
+            if existing == issue_contract:
+                return
+            raise ValueError(f"contract already exists for issue_id={issue_contract.issue_id}")
+
+        write_model_yaml(path, issue_contract)
 
     def get_contract(self, issue_id: str) -> IssueContract:
         return read_model_yaml(self._contract_path(issue_id), IssueContract)
@@ -38,21 +45,20 @@ class IssueRegistry:
         return sorted(records, key=lambda record: (record.queue_priority, record.issue_id))
 
     def set_queue_priority(self, issue_id: str, queue_priority: str) -> IssueRecord:
-        record = self.get_record(issue_id)
-        updated = record.model_copy(update={"queue_priority": queue_priority, "updated_at": self._now()})
+        updated = self._validated_update(issue_id, {"queue_priority": queue_priority, "updated_at": self._now()})
         self.save_record(updated)
         return updated
 
     def attach_attempt(self, issue_id: str, attempt_id: str, attempt_state: AttemptState, run_id: str) -> IssueRecord:
-        record = self.get_record(issue_id)
-        updated = record.model_copy(
-            update={
+        updated = self._validated_update(
+            issue_id,
+            {
                 "latest_attempt_id": attempt_id,
                 "current_run_id": run_id,
                 "attempt_state": attempt_state,
                 "issue_state": IssueState.running,
                 "updated_at": self._now(),
-            }
+            },
         )
         self.save_record(updated)
         return updated
@@ -64,14 +70,14 @@ class IssueRegistry:
         delivery_id: str | None = None,
         delivery_ref: str | None = None,
     ) -> IssueRecord:
-        record = self.get_record(issue_id)
-        updated = record.model_copy(
-            update={
+        updated = self._validated_update(
+            issue_id,
+            {
                 "delivery_state": delivery_state,
                 "delivery_id": delivery_id,
                 "delivery_ref": delivery_ref,
                 "updated_at": self._now(),
-            }
+            },
         )
         self.save_record(updated)
         return updated
@@ -93,6 +99,11 @@ class IssueRegistry:
     def _record_path(self, issue_id: str) -> Path:
         return self._records_dir() / f"{issue_id}.json"
 
+    def _validated_update(self, issue_id: str, update: dict[str, object]) -> IssueRecord:
+        record = self.get_record(issue_id)
+        payload = record.model_dump(mode="json")
+        payload.update(update)
+        return IssueRecord.model_validate(payload)
+
     def _now(self) -> datetime:
         return datetime.now(timezone.utc)
-
