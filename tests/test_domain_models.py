@@ -1,0 +1,763 @@
+import pytest
+from pydantic import ValidationError
+
+from nightshift.domain import AlertEvent, EventRecord, RunLifecycleState, RunState
+from nightshift.domain.contracts import (
+    AttemptLimitsContract,
+    EnginePreferencesContract,
+    IssueContract,
+    PassConditionContract,
+    TestEditPolicyContract,
+    TimeoutsContract,
+    VerificationContract,
+    VerificationStageContract,
+)
+from nightshift.domain.records import AttemptRecord
+from nightshift.domain.records import IssueRecord
+
+
+def test_issue_contract_rejects_runtime_fields() -> None:
+    payload = {
+        "issue_id": "ISSUE-1",
+        "title": "Implement feature",
+        "kind": "planning",
+        "priority": "high",
+        "goal": "Ship the feature",
+        "allowed_paths": ["src"],
+        "forbidden_paths": ["secrets"],
+        "verification": {
+            "issue_validation": {
+                "required": True,
+                "commands": ["pytest"],
+                "pass_condition": {
+                    "type": "exit_code",
+                    "expected": 0,
+                },
+            }
+        },
+        "engine_preferences": {
+            "primary": "gpt-5",
+            "fallback": "gpt-4.1",
+        },
+        "test_edit_policy": {
+            "can_add_tests": True,
+            "can_modify_existing_tests": True,
+            "can_weaken_assertions": False,
+            "requires_test_change_reason": True,
+        },
+        "attempt_limits": {
+            "max_files_changed": 3,
+            "max_lines_added": 200,
+            "max_lines_deleted": 50,
+        },
+        "timeouts": {
+            "command_seconds": 900,
+            "issue_budget_seconds": 7200,
+        },
+        "issue_state": "ready",
+    }
+
+    with pytest.raises(ValidationError):
+        IssueContract.model_validate(payload)
+
+
+def test_issue_contract_is_frozen_after_creation() -> None:
+    contract = IssueContract(
+        issue_id="ISSUE-1",
+        title="Implement feature",
+        kind="planning",
+        priority="high",
+        goal="Ship the feature",
+        allowed_paths=["src"],
+        forbidden_paths=["secrets"],
+        verification=VerificationContract(
+            issue_validation=VerificationStageContract(
+                required=True,
+                commands=("pytest",),
+                pass_condition=PassConditionContract(type="exit_code", expected=0),
+            )
+        ),
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
+        test_edit_policy=TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        attempt_limits=AttemptLimitsContract(
+            max_files_changed=3,
+            max_lines_added=200,
+            max_lines_deleted=50,
+        ),
+        timeouts=TimeoutsContract(command_seconds=900, issue_budget_seconds=7200),
+    )
+
+    with pytest.raises(ValidationError):
+        contract.priority = "low"
+
+    with pytest.raises(AttributeError):
+        contract.allowed_paths.append("more")
+
+    with pytest.raises(AttributeError):
+        contract.verification.issue_validation.commands.append("more")
+
+    assert contract.engine_preferences.primary == "gpt-5"
+    assert contract.engine_preferences.fallback == "gpt-4.1"
+
+
+def test_issue_record_from_contract_seeds_queue_priority() -> None:
+    contract = IssueContract(
+        issue_id="ISSUE-1",
+        title="Implement feature",
+        kind="planning",
+        priority="high",
+        goal="Ship the feature",
+        allowed_paths=["src"],
+        forbidden_paths=["secrets"],
+        verification=VerificationContract(),
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
+        test_edit_policy=TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        attempt_limits=AttemptLimitsContract(),
+        timeouts=TimeoutsContract(),
+    )
+
+    record = IssueRecord.from_contract(
+        contract,
+        issue_state="draft",
+        attempt_state="pending",
+        delivery_state="none",
+        created_at="2026-03-28T00:00:00Z",
+        updated_at="2026-03-28T00:00:00Z",
+    )
+
+    assert record.queue_priority == contract.priority
+
+
+def test_issue_record_from_contract_rejects_contract_field_overrides() -> None:
+    contract = IssueContract(
+        issue_id="ISSUE-1",
+        title="Implement feature",
+        kind="planning",
+        priority="high",
+        goal="Ship the feature",
+        allowed_paths=["src"],
+        forbidden_paths=["secrets"],
+        verification=VerificationContract(),
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
+        test_edit_policy=TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        attempt_limits=AttemptLimitsContract(),
+        timeouts=TimeoutsContract(),
+    )
+
+    with pytest.raises(ValueError, match="issue_id|queue_priority"):
+        IssueRecord.from_contract(
+            contract,
+            issue_id="OVERRIDE",
+            queue_priority="low",
+            issue_state="draft",
+            attempt_state="pending",
+            delivery_state="none",
+            created_at="2026-03-28T00:00:00Z",
+            updated_at="2026-03-28T00:00:00Z",
+        )
+
+
+def test_issue_contract_rejects_unknown_kind() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Unknown kind work",
+            kind="task",
+            priority="high",
+            goal="Do the task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
+def test_issue_contract_rejects_blank_identity_and_scope_values() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="   ",
+            title="Implement feature",
+            kind="planning",
+            priority="high",
+            goal="Ship the feature",
+            allowed_paths=["src", "   "],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
+def test_execution_contract_requires_paths_and_validation() -> None:
+    contract = IssueContract(
+        issue_id="ISSUE-1",
+        title="Run execution work",
+        kind="execution",
+        priority="high",
+        goal="Do the execution task",
+        allowed_paths=["src"],
+        forbidden_paths=["secrets"],
+        verification=VerificationContract(
+            issue_validation=VerificationStageContract(
+                required=True,
+                commands=("pytest",),
+                pass_condition=PassConditionContract(type="exit_code", expected=0),
+            )
+        ),
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+        test_edit_policy=TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        attempt_limits=AttemptLimitsContract(),
+        timeouts=TimeoutsContract(),
+    )
+
+    assert contract.kind == "execution"
+
+
+def test_execution_contract_rejects_commands_without_pass_condition() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(
+                issue_validation=VerificationStageContract(
+                    required=True,
+                    commands=("pytest",),
+                    pass_condition=None,
+                )
+            ),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
+def test_required_verification_stage_rejects_empty_commands() -> None:
+    with pytest.raises(ValidationError):
+        VerificationStageContract(required=True, commands=(), pass_condition=None)
+
+
+def test_execution_contract_rejects_unknown_pass_condition_type() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(
+                issue_validation=VerificationStageContract(
+                    required=True,
+                    commands=("pytest",),
+                    pass_condition={"type": "bogus"},
+                )
+            ),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
+def test_execution_contract_rejects_malformed_secondary_stage() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(
+                issue_validation=VerificationStageContract(
+                    required=True,
+                    commands=("pytest",),
+                    pass_condition=PassConditionContract(type="exit_code", expected=0),
+                ),
+                regression_validation=VerificationStageContract(
+                    required=True,
+                    commands=("pytest -m regression",),
+                    pass_condition=None,
+                ),
+            ),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
+def test_execution_contract_accepts_optional_concrete_verification() -> None:
+    contract = IssueContract(
+        issue_id="ISSUE-1",
+        title="Run execution work",
+        kind="execution",
+        priority="high",
+        goal="Do the execution task",
+        allowed_paths=["src"],
+        forbidden_paths=["secrets"],
+        verification=VerificationContract(
+            issue_validation=VerificationStageContract(
+                required=False,
+                commands=("pytest",),
+                pass_condition=PassConditionContract(type="exit_code", expected=0),
+            )
+        ),
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+        test_edit_policy=TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        attempt_limits=AttemptLimitsContract(),
+        timeouts=TimeoutsContract(),
+    )
+
+    assert contract.verification.issue_validation is not None
+    assert contract.verification.issue_validation.required is False
+
+
+@pytest.mark.parametrize(
+    "pass_condition",
+    (
+        {"type": "exit_code", "expected": "0"},
+        {"type": "all_exit_codes_zero", "expected": 0},
+    ),
+)
+def test_pass_condition_contract_rejects_mismatched_expected_type(pass_condition: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        PassConditionContract.model_validate(pass_condition)
+
+
+@pytest.mark.parametrize(
+    ("factory", "kwargs"),
+    (
+        (AttemptLimitsContract, {"max_files_changed": -1}),
+        (AttemptLimitsContract, {"max_lines_added": -1}),
+        (TimeoutsContract, {"command_seconds": -1}),
+        (TimeoutsContract, {"issue_budget_seconds": -1}),
+    ),
+)
+def test_contract_numeric_fields_reject_negative_values(factory, kwargs) -> None:
+    with pytest.raises(ValidationError):
+        factory(**kwargs)
+
+
+def test_execution_contract_rejects_empty_allowed_paths() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=[],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(
+                issue_validation=VerificationStageContract(
+                    required=True,
+                    commands=("pytest",),
+                    pass_condition=PassConditionContract(type="exit_code", expected=0),
+                )
+            ),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
+def test_execution_contract_rejects_empty_verification() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
+def test_attempt_record_requires_validation_pass_for_accepted() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        AttemptRecord.model_validate(
+            {
+                "attempt_id": "ATT-1",
+                "issue_id": "ISSUE-1",
+                "run_id": "RUN-1",
+                "engine_name": "gpt-5",
+                "engine_invocation_id": "INV-1",
+                "attempt_state": "accepted",
+                "validation_result": {"passed": False},
+            }
+        )
+
+    assert "accepted attempts require a passing validation_result" in str(exc_info.value)
+
+
+def test_attempt_record_uses_canonical_validation_passed_field() -> None:
+    record = AttemptRecord.model_validate(
+        {
+            "attempt_id": "ATT-1",
+            "issue_id": "ISSUE-1",
+            "run_id": "RUN-1",
+            "engine_name": "gpt-5",
+            "engine_invocation_id": "INV-1",
+            "attempt_state": "accepted",
+            "validation_result": {"passed": True},
+        }
+    )
+
+    assert record.validation_result is not None
+    assert record.validation_result.passed is True
+
+
+def test_attempt_record_rejects_success_only_validation_result() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        AttemptRecord.model_validate(
+            {
+                "attempt_id": "ATT-1",
+                "issue_id": "ISSUE-1",
+                "run_id": "RUN-1",
+                "engine_name": "gpt-5",
+                "engine_invocation_id": "INV-1",
+                "attempt_state": "accepted",
+                "validation_result": {"success": True},
+            }
+        )
+
+    assert "validation_result" in str(exc_info.value)
+
+
+def test_attempt_record_requires_preflight_failed_to_be_false() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        AttemptRecord.model_validate(
+            {
+                "attempt_id": "ATT-1",
+                "issue_id": "ISSUE-1",
+                "run_id": "RUN-1",
+                "engine_name": "gpt-5",
+                "engine_invocation_id": "INV-1",
+                "attempt_state": "preflight_failed",
+                "preflight_passed": True,
+            }
+        )
+
+    assert "preflight_failed attempts require preflight_passed to be False" in str(exc_info.value)
+
+
+def test_issue_record_rejects_negative_retry_count() -> None:
+    with pytest.raises(ValidationError):
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "draft",
+                "attempt_state": "pending",
+                "delivery_state": "none",
+                "queue_priority": "high",
+                "retry_count": -1,
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+
+def test_issue_record_rejects_done_without_accepted_attempt() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "done",
+                "attempt_state": "pending",
+                "delivery_state": "none",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "done issues require" in str(exc_info.value)
+
+
+def test_issue_record_rejects_accepted_attempt_outside_done_state() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "draft",
+                "attempt_state": "accepted",
+                "delivery_state": "none",
+                "accepted_attempt_id": "ATT-1",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "accepted attempts require issue_state to be done" in str(exc_info.value)
+
+
+def test_attempt_record_rejects_negative_duration_ms() -> None:
+    with pytest.raises(ValidationError):
+        AttemptRecord.model_validate(
+            {
+                "attempt_id": "ATT-1",
+                "issue_id": "ISSUE-1",
+                "run_id": "RUN-1",
+                "engine_name": "gpt-5",
+                "engine_invocation_id": "INV-1",
+                "attempt_state": "pending",
+                "duration_ms": -1,
+            }
+        )
+
+
+def test_attempt_record_rejects_blank_engine_name() -> None:
+    with pytest.raises(ValidationError):
+        AttemptRecord.model_validate(
+            {
+                "attempt_id": "ATT-1",
+                "issue_id": "ISSUE-1",
+                "run_id": "RUN-1",
+                "engine_name": "   ",
+                "engine_invocation_id": "INV-1",
+                "attempt_state": "pending",
+            }
+        )
+
+
+def test_domain_package_exports_run_state_record_model() -> None:
+    record = RunState.model_validate(
+        {
+            "run_id": "RUN-1",
+            "run_state": "running",
+        }
+    )
+
+    assert record.run_id == "RUN-1"
+    assert record.run_state == RunLifecycleState.running
+
+
+def test_event_and_alert_models_validate_minimum_payloads() -> None:
+    event = EventRecord.model_validate(
+        {
+            "seq": 1,
+            "run_id": "RUN-1",
+            "event_type": "run.started",
+            "created_at": "2026-03-28T00:00:00Z",
+        }
+    )
+    alert = AlertEvent.model_validate(
+        {
+            "alert_id": "ALERT-1",
+            "run_id": "RUN-1",
+            "severity": "warning",
+            "event_type": "run.degraded",
+            "summary": "Something needs attention",
+            "created_at": "2026-03-28T00:00:00Z",
+            "delivery_status": "pending",
+        }
+    )
+
+    assert event.event_type == "run.started"
+    assert alert.summary == "Something needs attention"
+
+
+def test_issue_record_exposes_delivery_fields() -> None:
+    record = IssueRecord.model_validate(
+        {
+            "issue_id": "ISSUE-1",
+            "issue_state": "draft",
+            "attempt_state": "pending",
+            "delivery_state": "none",
+            "queue_priority": "high",
+            "created_at": "2026-03-28T00:00:00Z",
+            "updated_at": "2026-03-28T00:00:00Z",
+        }
+    )
+
+    assert hasattr(record, "queue_priority")
+    assert hasattr(record, "delivery_id")
+    assert hasattr(record, "delivery_ref")
+
+
+def test_issue_record_rejects_blocked_without_blocker_type() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "blocked",
+                "attempt_state": "pending",
+                "delivery_state": "none",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "blocker_type" in str(exc_info.value)
+
+
+def test_issue_record_rejects_non_none_delivery_without_accepted_attempt() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "draft",
+                "attempt_state": "pending",
+                "delivery_state": "branch_ready",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "accepted_attempt_id" in str(exc_info.value)
+
+
+def test_issue_record_rejects_delivery_state_without_done_issue_state() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "draft",
+                "attempt_state": "pending",
+                "delivery_state": "branch_ready",
+                "accepted_attempt_id": "ATT-1",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "delivery states require issue_state to be done" in str(exc_info.value)
+
+
+def test_issue_record_rejects_delivery_state_without_accepted_attempt_state() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "done",
+                "attempt_state": "pending",
+                "delivery_state": "branch_ready",
+                "accepted_attempt_id": "ATT-1",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "attempt_state to be accepted" in str(exc_info.value)
+
+
+def test_issue_record_rejects_pr_opened_without_delivery_reference() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "done",
+                "attempt_state": "accepted",
+                "delivery_state": "pr_opened",
+                "accepted_attempt_id": "ATT-1",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "delivery_id or delivery_ref" in str(exc_info.value)
+
+
+def test_issue_record_rejects_branch_ready_without_branch_name() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "done",
+                "attempt_state": "accepted",
+                "delivery_state": "branch_ready",
+                "accepted_attempt_id": "ATT-1",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "branch_ready delivery states require branch_name" in str(exc_info.value)

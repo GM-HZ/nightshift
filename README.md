@@ -1,16 +1,63 @@
 # NightShift
 
-NightShift is a standalone project for the overnight AI coding harness design and future implementation.
+NightShift is an overnight AI coding harness. This repository now contains both the `v4.2.1` architecture spec set and a Python MVP kernel that can execute a single issue, validate it, recover interrupted runs, and emit a minimal historical report.
 
-## Current Contents
+## Current Status
 
-- `nightshift.md`: PRD-oriented product workflow draft
-- `review.md`: review notes and design deltas
-- `docs/superpowers/specs/`: architecture specs from V1 through V4.2
-- `docs/superpowers/specs/nightshift-v4.2/`: detailed design pack under the V4.2 architecture
+- Current implementation target: `v4.2.1`
+- Current CLI surface: `run-one`, `recover`, `report`, `queue status`, `queue show`, `queue reprioritize`
+- Current engine adapters: `codex`, `claude`
+- Current scope: single-issue execution flow plus persistence, validation, recovery, and run-scoped reporting
+
+## Repository Map
+
+- `src/nightshift/`: Python MVP kernel implementation
+- `tests/`: executable behavior and regression coverage
+- `examples/`: reference config and issue contract shapes
+- `docs/superpowers/specs/`: architecture history and current spec set
+- `docs/mvp-walkthrough.md`: implementation-facing usage notes for the current MVP
 
 ## Current Recommended Entry Points
 
-- Architecture: `docs/superpowers/specs/2026-03-27-nightshift-v4.2-unified-spec.md`
-- Architecture (Chinese): `docs/superpowers/specs/2026-03-27-nightshift-v4.2-unified-spec.zh-CN.md`
-- Detailed design pack: `docs/superpowers/specs/nightshift-v4.2/README.md`
+- Specs index: `docs/superpowers/specs/README.md`
+- Current architecture: `docs/superpowers/specs/2026-03-27-nightshift-v4.2.1-unified-spec.md`
+- Current detailed design pack: `docs/superpowers/specs/nightshift-v4.2.1/README.md`
+- MVP walkthrough: `docs/mvp-walkthrough.md`
+
+## Current MVP Boundaries
+
+What works now:
+
+- load `nightshift.yaml`
+- read immutable issue contracts and current issue records
+- create issue worktrees and snapshots
+- execute via `codex` or `claude`
+- run validation gates
+- persist run state, issue snapshots, attempt records, events, and alerts
+- recover interrupted runs into a new controlling run
+- generate a minimal report from run-scoped persisted history
+
+What is intentionally not in the MVP yet:
+
+- requirement splitter
+- PR dispatcher / merge automation
+- notifications and dashboards
+- unattended multi-issue overnight scheduling policy beyond the current queue primitives
+
+## Remaining Non-MVP Gaps
+
+The current branch is intentionally not a full `v4.2.1` product-complete implementation. These gaps are known and not bugs in the current MVP scope:
+
+- no issue ingestion flow yet: contracts and current issue records must still be seeded before execution
+- no multi-issue overnight control loop yet: `run-one` exists, but `run`, `run --daemon`, and `stop` are not implemented
+- no queue admission command yet: `queue add` is still absent
+- no delivery automation yet: branch handoff, PR opening, review sync, and merge workflows are not wired
+- no operator log views yet: `logs --issue` is not implemented
+- config sections such as `retry`, `alerts`, and top-level validation command groups are modeled, but only minimally wired in the MVP
+- no rich morning report generator yet beyond the current minimal JSON historical report
+
+## Local Verification
+
+```bash
+python -m pytest -v
+```

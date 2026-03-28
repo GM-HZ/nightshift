@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, StrictInt, StringConstraints, model_validator
+
+from .enums import IssueKind
+
+NonEmptyStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
+class EnginePreferencesContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    primary: NonEmptyStr | None = None
+    fallback: NonEmptyStr | None = None
+
+
+class PassConditionContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: Literal["exit_code", "all_exit_codes_zero"]
+    expected: StrictInt | None = None
+
+    @model_validator(mode="after")
+    def validate_expected(self) -> "PassConditionContract":
+        if self.type == "exit_code" and self.expected is None:
+            raise ValueError("exit_code pass conditions require an integer expected value")
+
+        if self.type == "all_exit_codes_zero" and self.expected is not None:
+            raise ValueError("all_exit_codes_zero pass conditions require expected to be omitted")
+
+        return self
+
+
+class VerificationStageContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    required: bool
+    commands: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    pass_condition: PassConditionContract | None = None
+
+    @model_validator(mode="after")
+    def validate_stage_shape(self) -> "VerificationStageContract":
+        if self.required and not self.commands:
+            raise ValueError("required verification stages must declare at least one command")
+
+        if self.commands and self.pass_condition is None:
+            raise ValueError("verification stages with commands require a pass_condition")
+
+        if not self.commands and self.pass_condition is not None:
+            raise ValueError("verification stages without commands must not declare a pass_condition")
+
+        return self
+
+
+class VerificationContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    issue_validation: VerificationStageContract | None = None
+    static_validation: VerificationStageContract | None = None
+    regression_validation: VerificationStageContract | None = None
+    promotion_validation: VerificationStageContract | None = None
+
+
+class TestEditPolicyContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    can_add_tests: bool
+    can_modify_existing_tests: bool
+    can_weaken_assertions: bool
+    requires_test_change_reason: bool
+
+
+TestEditPolicyContract.__test__ = False
+
+
+class AttemptLimitsContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    max_files_changed: NonNegativeInt | None = None
+    max_lines_added: NonNegativeInt | None = None
+    max_lines_deleted: NonNegativeInt | None = None
+
+
+class TimeoutsContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    command_seconds: PositiveInt | None = None
+    issue_budget_seconds: PositiveInt | None = None
+
+
+class IssueContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    issue_id: NonEmptyStr
+    title: NonEmptyStr
+    kind: IssueKind
+    goal: NonEmptyStr
+    allowed_paths: tuple[NonEmptyStr, ...]
+    forbidden_paths: tuple[NonEmptyStr, ...]
+    verification: VerificationContract
+    test_edit_policy: TestEditPolicyContract
+    attempt_limits: AttemptLimitsContract
+    timeouts: TimeoutsContract
+    priority: NonEmptyStr
+    engine_preferences: EnginePreferencesContract = Field(default_factory=EnginePreferencesContract)
+    description: NonEmptyStr | None = None
+    acceptance: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    notes: NonEmptyStr | None = None
+    risk: NonEmptyStr | None = None
+
+    @model_validator(mode="after")
+    def validate_execution_requirements(self) -> "IssueContract":
+        if self.kind == IssueKind.execution:
+            if not self.allowed_paths:
+                raise ValueError("execution contracts require allowed_paths")
+
+            if not self._has_executable_validation():
+                raise ValueError("execution contracts require executable validation")
+
+        return self
+
+    def _has_executable_validation(self) -> bool:
+        stages = (
+            self.verification.issue_validation,
+            self.verification.static_validation,
+            self.verification.regression_validation,
+            self.verification.promotion_validation,
+        )
+        return any(
+            stage is not None
+            and len(stage.commands) > 0
+            and stage.pass_condition is not None
+            for stage in stages
+        )
