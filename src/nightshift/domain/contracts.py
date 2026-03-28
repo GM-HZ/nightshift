@@ -1,17 +1,19 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, StrictInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, StrictInt, StringConstraints, model_validator
 
 from .enums import IssueKind
+
+NonEmptyStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class EnginePreferencesContract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    primary: str | None = None
-    fallback: str | None = None
+    primary: NonEmptyStr | None = None
+    fallback: NonEmptyStr | None = None
 
 
 class PassConditionContract(BaseModel):
@@ -35,7 +37,7 @@ class VerificationStageContract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     required: bool
-    commands: tuple[str, ...] = Field(default_factory=tuple)
+    commands: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     pass_condition: PassConditionContract | None = None
 
     @model_validator(mode="after")
@@ -91,22 +93,22 @@ class TimeoutsContract(BaseModel):
 class IssueContract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    issue_id: str
-    title: str
+    issue_id: NonEmptyStr
+    title: NonEmptyStr
     kind: IssueKind
-    goal: str
-    allowed_paths: tuple[str, ...]
-    forbidden_paths: tuple[str, ...]
+    goal: NonEmptyStr
+    allowed_paths: tuple[NonEmptyStr, ...]
+    forbidden_paths: tuple[NonEmptyStr, ...]
     verification: VerificationContract
     test_edit_policy: TestEditPolicyContract
     attempt_limits: AttemptLimitsContract
     timeouts: TimeoutsContract
-    priority: str
+    priority: NonEmptyStr
     engine_preferences: EnginePreferencesContract = Field(default_factory=EnginePreferencesContract)
-    description: str | None = None
-    acceptance: tuple[str, ...] = Field(default_factory=tuple)
-    notes: str | None = None
-    risk: str | None = None
+    description: NonEmptyStr | None = None
+    acceptance: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    notes: NonEmptyStr | None = None
+    risk: NonEmptyStr | None = None
 
     @model_validator(mode="after")
     def validate_execution_requirements(self) -> "IssueContract":

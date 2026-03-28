@@ -194,6 +194,29 @@ def test_issue_contract_rejects_unknown_kind() -> None:
         )
 
 
+def test_issue_contract_rejects_blank_identity_and_scope_values() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="   ",
+            title="Implement feature",
+            kind="planning",
+            priority="high",
+            goal="Ship the feature",
+            allowed_paths=["src", "   "],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
 def test_execution_contract_requires_paths_and_validation() -> None:
     contract = IssueContract(
         issue_id="ISSUE-1",
@@ -512,6 +535,41 @@ def test_issue_record_rejects_negative_retry_count() -> None:
         )
 
 
+def test_issue_record_rejects_done_without_accepted_attempt() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "done",
+                "attempt_state": "pending",
+                "delivery_state": "none",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "done issues require" in str(exc_info.value)
+
+
+def test_issue_record_rejects_accepted_attempt_outside_done_state() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "draft",
+                "attempt_state": "accepted",
+                "delivery_state": "none",
+                "accepted_attempt_id": "ATT-1",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "accepted attempts require issue_state to be done" in str(exc_info.value)
+
+
 def test_attempt_record_rejects_negative_duration_ms() -> None:
     with pytest.raises(ValidationError):
         AttemptRecord.model_validate(
@@ -523,6 +581,20 @@ def test_attempt_record_rejects_negative_duration_ms() -> None:
                 "engine_invocation_id": "INV-1",
                 "attempt_state": "pending",
                 "duration_ms": -1,
+            }
+        )
+
+
+def test_attempt_record_rejects_blank_engine_name() -> None:
+    with pytest.raises(ValidationError):
+        AttemptRecord.model_validate(
+            {
+                "attempt_id": "ATT-1",
+                "issue_id": "ISSUE-1",
+                "run_id": "RUN-1",
+                "engine_name": "   ",
+                "engine_invocation_id": "INV-1",
+                "attempt_state": "pending",
             }
         )
 

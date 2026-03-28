@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, StringConstraints, model_validator
 
 from .enums import AlertSeverity, AttemptState, DeliveryState, IssueState, RunState as RunStateEnum
+
+NonEmptyStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class AttemptValidationResult(BaseModel):
@@ -13,32 +15,32 @@ class AttemptValidationResult(BaseModel):
 
     passed: bool
     summary: str | None = None
-    details: str | dict[str, Any] | None = None
+    details: NonEmptyStr | dict[str, Any] | None = None
     exit_code: NonNegativeInt | None = None
-    command: str | None = None
-    notes: str | None = None
+    command: NonEmptyStr | None = None
+    notes: NonEmptyStr | None = None
 
 
 class IssueRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    issue_id: str
+    issue_id: NonEmptyStr
     issue_state: IssueState
     attempt_state: AttemptState
     delivery_state: DeliveryState
-    queue_priority: str
-    delivery_id: str | None = None
-    delivery_ref: str | None = None
-    blocker_type: str | None = None
-    progress_type: str | None = None
-    current_run_id: str | None = None
-    latest_attempt_id: str | None = None
-    accepted_attempt_id: str | None = None
-    branch_name: str | None = None
-    worktree_path: str | None = None
+    queue_priority: NonEmptyStr
+    delivery_id: NonEmptyStr | None = None
+    delivery_ref: NonEmptyStr | None = None
+    blocker_type: NonEmptyStr | None = None
+    progress_type: NonEmptyStr | None = None
+    current_run_id: NonEmptyStr | None = None
+    latest_attempt_id: NonEmptyStr | None = None
+    accepted_attempt_id: NonEmptyStr | None = None
+    branch_name: NonEmptyStr | None = None
+    worktree_path: NonEmptyStr | None = None
     retry_count: NonNegativeInt = 0
-    deferred_reason: str | None = None
-    last_summary: str | None = None
+    deferred_reason: NonEmptyStr | None = None
+    last_summary: NonEmptyStr | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -62,6 +64,15 @@ class IssueRecord(BaseModel):
         if self.issue_state == IssueState.blocked and not self.blocker_type:
             raise ValueError("blocker_type must be set when issue_state is blocked")
 
+        if self.issue_state == IssueState.done and self.attempt_state != AttemptState.accepted:
+            raise ValueError("done issues require attempt_state to be accepted")
+
+        if self.issue_state == IssueState.done and not self.accepted_attempt_id:
+            raise ValueError("done issues require accepted_attempt_id")
+
+        if self.attempt_state == AttemptState.accepted and self.issue_state != IssueState.done:
+            raise ValueError("accepted attempts require issue_state to be done")
+
         if self.delivery_state != DeliveryState.none and not self.accepted_attempt_id:
             raise ValueError("accepted_attempt_id must be set when delivery_state is not none")
 
@@ -79,25 +90,25 @@ class IssueRecord(BaseModel):
 class AttemptRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    attempt_id: str
-    issue_id: str
-    run_id: str
-    engine_name: str
-    engine_invocation_id: str
+    attempt_id: NonEmptyStr
+    issue_id: NonEmptyStr
+    run_id: NonEmptyStr
+    engine_name: NonEmptyStr
+    engine_invocation_id: NonEmptyStr
     engine_capabilities_snapshot: dict[str, Any] = Field(default_factory=dict)
     attempt_state: AttemptState
-    progress_type: str | None = None
-    branch_name: str | None = None
-    worktree_path: str | None = None
-    pre_edit_commit_sha: str | None = None
+    progress_type: NonEmptyStr | None = None
+    branch_name: NonEmptyStr | None = None
+    worktree_path: NonEmptyStr | None = None
+    pre_edit_commit_sha: NonEmptyStr | None = None
     preflight_passed: bool | None = None
-    preflight_summary: str | None = None
-    engine_outcome: str | None = None
+    preflight_summary: NonEmptyStr | None = None
+    engine_outcome: NonEmptyStr | None = None
     validation_result: AttemptValidationResult | None = None
     recoverable: bool | None = None
     retry_recommended: bool | None = None
-    summary: str | None = None
-    artifact_dir: str | None = None
+    summary: NonEmptyStr | None = None
+    artifact_dir: NonEmptyStr | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
     duration_ms: NonNegativeInt | None = None
@@ -120,19 +131,19 @@ class AttemptRecord(BaseModel):
 class RunState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    run_id: str
+    run_id: NonEmptyStr
     run_state: RunStateEnum
-    base_branch: str | None = None
-    selected_engine_policy: str | None = None
+    base_branch: NonEmptyStr | None = None
+    selected_engine_policy: NonEmptyStr | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
     issues_attempted: NonNegativeInt = 0
     issues_completed: NonNegativeInt = 0
     issues_blocked: NonNegativeInt = 0
     issues_deferred: NonNegativeInt = 0
-    active_issue_id: str | None = None
-    active_attempt_id: str | None = None
-    active_worktrees: list[str] = Field(default_factory=list)
+    active_issue_id: NonEmptyStr | None = None
+    active_attempt_id: NonEmptyStr | None = None
+    active_worktrees: list[NonEmptyStr] = Field(default_factory=list)
     alert_counts: dict[str, NonNegativeInt] = Field(default_factory=dict)
 
 
@@ -140,10 +151,10 @@ class EventRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     seq: NonNegativeInt
-    run_id: str
-    issue_id: str | None = None
-    attempt_id: str | None = None
-    event_type: str
+    run_id: NonEmptyStr
+    issue_id: NonEmptyStr | None = None
+    attempt_id: NonEmptyStr | None = None
+    event_type: NonEmptyStr
     payload: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
@@ -151,12 +162,12 @@ class EventRecord(BaseModel):
 class AlertEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    alert_id: str
-    run_id: str
-    issue_id: str | None = None
+    alert_id: NonEmptyStr
+    run_id: NonEmptyStr
+    issue_id: NonEmptyStr | None = None
     severity: AlertSeverity
-    event_type: str
-    summary: str
-    details: str | dict[str, Any] | None = None
+    event_type: NonEmptyStr
+    summary: NonEmptyStr
+    details: NonEmptyStr | dict[str, Any] | None = None
     created_at: datetime
-    delivery_status: str
+    delivery_status: NonEmptyStr
