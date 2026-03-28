@@ -71,8 +71,18 @@ def test_workspace_manager_prepares_expected_branch_and_worktree_path(tmp_path: 
 
     workspace = manager.prepare_workspace(make_contract("ISSUE-123", "Add Workspace Manager"))
 
-    assert workspace.branch_name == "nightshift/issue-ISSUE-123-add-workspace-manager"
+    assert workspace.branch_name == "nightshift/issue-issue-123-add-workspace-manager"
     assert workspace.worktree_path == repo / ".nightshift" / "worktrees" / "issue-ISSUE-123"
+    assert run_git(workspace.worktree_path, "branch", "--show-current") == workspace.branch_name
+
+
+def test_workspace_manager_sanitizes_issue_id_for_branch_name(tmp_path: Path) -> None:
+    repo = init_repo(tmp_path)
+    manager = WorkspaceManager(repo)
+
+    workspace = manager.prepare_workspace(make_contract("ISSUE 123", "Add Workspace Manager"))
+
+    assert workspace.branch_name == "nightshift/issue-issue-123-add-workspace-manager"
     assert run_git(workspace.worktree_path, "branch", "--show-current") == workspace.branch_name
 
 

@@ -62,8 +62,9 @@ class WorkspaceManager:
         git_clean_untracked(workspace.worktree_path, self.cleanup_whitelist)
 
     def _branch_name(self, issue_id: str, title: str) -> str:
-        slug = self._slugify(title) or issue_id.lower()
-        return f"nightshift/issue-{issue_id}-{slug}"
+        issue_slug = self._slugify(issue_id) or "issue"
+        title_slug = self._slugify(title) or issue_slug
+        return f"nightshift/issue-{issue_slug}-{title_slug}"
 
     def _worktree_path(self, issue_id: str) -> Path:
         return self.worktree_root / f"issue-{issue_id}"
