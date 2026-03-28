@@ -59,6 +59,7 @@ Current product-slice design docs:
 - `docs/architecture/product/execution-selection-mvp.md`
 - `docs/architecture/product/queue-admission-mvp.md`
 - `docs/architecture/product/splitter-proposal-review-mvp.md`
+- `docs/architecture/product/delivery-pr-dispatcher-mvp.md`
 
 Current product-slice implementation status:
 
@@ -73,7 +74,8 @@ Current product-slice implementation status:
 - `run --issues` and `run --all` now exist for sequential fail-fast batch execution
 - batch execution currently reuses kernel `run-one` and current queue ordering
 - splitter-driven proposal generation and review/publish workflow now exist in MVP form, including a real GitHub create adapter
-- the current remaining gaps are proposal quality, richer editing/review ergonomics, and environment credentials for live GitHub publish
+- delivery and PR automation now exist in MVP form after accepted execution
+- the current remaining gaps are proposal quality, richer editing/review ergonomics, environment credentials for live GitHub publish, and post-PR workflows such as review sync and merge automation
 
 ## Current Next-Step Theme
 

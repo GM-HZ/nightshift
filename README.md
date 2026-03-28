@@ -5,9 +5,9 @@ NightShift is an overnight AI coding harness. This repository now contains both 
 ## Current Status
 
 - Current implementation target: `v4.2.1`
-- Current CLI surface: `split`, `proposals show`, `proposals update`, `proposals approve`, `proposals reject`, `proposals publish`, `run-one`, `run`, `recover`, `report`, `queue status`, `queue show`, `queue add`, `queue reprioritize`, `issue ingest-github`
+- Current CLI surface: `split`, `proposals show`, `proposals update`, `proposals approve`, `proposals reject`, `proposals publish`, `run-one`, `run`, `deliver`, `recover`, `report`, `queue status`, `queue show`, `queue add`, `queue reprioritize`, `issue ingest-github`
 - Current engine adapters: `codex`, `claude`
-- Current scope: single-issue execution flow plus persistence, validation, recovery, and run-scoped reporting
+- Current scope: single-issue execution flow plus persistence, validation, recovery, run-scoped reporting, and MVP delivery-to-PR automation
 
 ## Repository Map
 
@@ -56,6 +56,7 @@ What is intentionally not in the MVP yet:
 - PR dispatcher / merge automation
 - notifications and dashboards
 - unattended multi-issue overnight scheduling policy beyond the current sequential `run --issues` / `run --all` primitives
+- only the first version of delivery automation: PR creation is wired, but merge automation and review sync are still out of scope
 
 ## Remaining Non-MVP Gaps
 
@@ -64,7 +65,7 @@ The current branch is intentionally not a full `v4.2.1` product-complete impleme
 - no fully automated end-to-end intake workflow yet: splitter proposal generation, review, and publish flow now exist, but proposal editing is still CLI-driven, skill-backed decomposition is still minimal, and real GitHub publish still depends on operator-provided token credentials
 - no daemonized multi-issue overnight control loop yet: `run --issues` and `run --all` now exist, but `run --daemon` and `stop` are not implemented
 - no richer queue approval workflow yet beyond `queue add` and current reprioritization
-- no delivery automation yet: branch handoff, PR opening, review sync, and merge workflows are not wired
+- delivery automation is only MVP-sized: it can submit a PR for an accepted issue, but review sync, merge automation, and PR update policies are not yet wired
 - no operator log views yet: `logs --issue` is not implemented
 - config sections such as `retry`, `alerts`, and top-level validation command groups are modeled, but only minimally wired in the MVP
 - no rich morning report generator yet beyond the current minimal JSON historical report

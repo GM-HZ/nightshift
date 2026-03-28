@@ -4,6 +4,19 @@ Date: 2026-03-28
 
 This report captures a real operator-style rehearsal against fresh temporary repositories after the `v4.2.1` MVP implementation landed on `master`.
 
+Update on 2026-03-29:
+
+- the product workflow has since advanced beyond the original kernel-only rehearsal
+- the repository now supports `split -> publish issue -> ingest -> queue -> run`
+- a live rehearsal also confirmed `run` can now reach `accepted`
+- a live rehearsal also confirmed `deliver` can commit, push, create a PR, and attach delivery linkage
+
+Latest live delivery rehearsal result:
+
+- accepted issue: `GH-7`
+- created PR: `https://github.com/GM-HZ/nightshift/pull/8`
+- resulting issue record state: `done + accepted + pr_opened`
+
 ## Scope
 
 The rehearsal covered two layers:

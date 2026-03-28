@@ -1,6 +1,6 @@
 # NightShift MVP Walkthrough
 
-This walkthrough is for the current Python MVP that implements the `v4.2.1` kernel shape.
+This walkthrough is for the current Python MVP that implements the `v4.2.1` kernel shape plus the first product workflow slices above it, including MVP PR delivery.
 
 ## Read This First
 
@@ -19,6 +19,7 @@ For local multi-worktree development guidance, also read:
 ## What The MVP Can Do
 
 - execute a single approved issue with `run-one`
+- deliver an accepted issue into a GitHub pull request with `deliver`
 - execute a single configured engine selection (`codex` or `claude`)
 - create and reuse run-scoped persistence under `nightshift-data/`
 - run validation gates and accept or reject attempts
@@ -28,7 +29,14 @@ For local multi-worktree development guidance, also read:
 
 ## What The MVP Still Assumes
 
-The MVP does not yet include an issue ingestion or approval CLI. Before running the kernel, the target repository must already contain:
+The repository no longer requires hand-authoring every execution artifact from scratch. The current workflow can now reach the kernel through:
+
+- `split`
+- `proposals update|approve|reject|publish`
+- `issue ingest-github`
+- `queue add`
+
+Before running the kernel directly with `run-one`, the target repository must already contain:
 
 - immutable issue contracts under `nightshift/issues/<issue_id>.yaml`
 - current issue records under `nightshift-data/issue-records/<issue_id>.json`
@@ -45,10 +53,8 @@ Those example files are templates, not an automatically bootstrapped runnable re
 
 This branch intentionally stops short of the full `v4.2.1` product surface. The following items remain outside the current MVP:
 
-- no requirement splitter or approval ingestion flow
-- no `queue add` command
 - no multi-issue overnight scheduler, daemon runner, or stop control loop
-- no delivery automation for branch-ready, PR-opened, reviewed, merged, or closed states
+- no merge automation or review-sync workflow after PR creation
 - no operator log browsing command such as `logs --issue`
 - no rich report generator beyond the current minimal JSON historical report
 - retry budgets, circuit breaker behavior, alert delivery channels, and top-level validation command groups are not yet fully wired into orchestration policy
@@ -106,7 +112,17 @@ python -m nightshift.cli.main queue --help
 
 Current commands:
 
+- `split`
+- `proposals show`
+- `proposals update`
+- `proposals approve`
+- `proposals reject`
+- `proposals publish`
+- `issue ingest-github`
+- `queue add`
 - `run-one`
+- `run`
+- `deliver`
 - `recover`
 - `report`
 - `queue status`
@@ -123,7 +139,20 @@ python -m nightshift.cli.main queue show NS-123 --repo /path/to/repo
 python -m nightshift.cli.main queue reprioritize NS-123 high --repo /path/to/repo
 ```
 
-### 2. Run One Approved Issue
+### 2. Ingest And Admit A Reviewed GitHub Issue
+
+```bash
+python -m nightshift.cli.main issue ingest-github \
+  --repo-full-name GM-HZ/nightshift \
+  --issue 7 \
+  --materialize-only \
+  --config /path/to/repo/nightshift.yaml
+
+python -m nightshift.cli.main queue add GH-7 \
+  --config /path/to/repo/nightshift.yaml
+```
+
+### 3. Run One Approved Issue
 
 ```bash
 python -m nightshift.cli.main run-one NS-123 \
@@ -140,7 +169,32 @@ Prerequisites:
 - the configured engine binary must be installed and available on `PATH`
 - the issue contract and issue record must already exist
 
-### 3. Recover An Interrupted Run
+### 4. Deliver An Accepted Issue
+
+```bash
+python -m nightshift.cli.main deliver \
+  --issues GH-7 \
+  --config /path/to/repo/nightshift.yaml
+```
+
+Or as a convenience wrapper:
+
+```bash
+python -m nightshift.cli.main run \
+  --issues GH-7 \
+  --config /path/to/repo/nightshift.yaml \
+  --deliver
+```
+
+Delivery prerequisites:
+
+- the issue must already be `done + accepted`
+- `product.delivery.repo_full_name` must be configured
+- `GITHUB_TOKEN` or `NIGHTSHIFT_GITHUB_TOKEN` must be available
+- the accepted issue worktree must still exist
+- the local repository must have a writable `origin` remote
+
+### 5. Recover An Interrupted Run
 
 ```bash
 python -m nightshift.cli.main recover \
@@ -157,7 +211,7 @@ Recovery semantics in the current MVP:
 
 The command emits JSON including both `source_run_id` and `recovery_run_id`.
 
-### 4. Generate A Minimal Historical Report
+### 6. Generate A Minimal Historical Report
 
 ```bash
 python -m nightshift.cli.main report --repo /path/to/repo
