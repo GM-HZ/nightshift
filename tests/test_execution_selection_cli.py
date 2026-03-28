@@ -155,3 +155,70 @@ def test_run_command_surfaces_operator_friendly_failure_summary(monkeypatch, tmp
     assert "run failed for selected issues" in result.stderr
     assert "engine outcome engine_crash cannot be accepted" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_run_command_with_deliver_invokes_delivery_for_accepted_issues(monkeypatch, tmp_path: Path) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    _write_config(config_path, tmp_path)
+
+    monkeypatch.setattr(
+        "nightshift.cli.app.resolve_selected_issues",
+        lambda registry, issue_ids: SelectionResult(items=(SelectionItem(issue_id="GH-7", queue_priority="high"),)),
+    )
+    monkeypatch.setattr(
+        "nightshift.cli.app.run_batch",
+        lambda selection, run_one: BatchRunSummary(
+            batch_size=1,
+            issues_attempted=1,
+            issues_accepted=1,
+            stopped_early=False,
+        ),
+    )
+
+    class FakeService:
+        def deliver(self, request):
+            assert request.issue_ids == ("GH-7",)
+            from nightshift.product.delivery.models import DeliveryBatchResult, DeliveryResult
+
+            return DeliveryBatchResult(
+                results=(DeliveryResult(issue_id="GH-7", delivery_state="submitted", delivery_ref="https://example.com/pr/7"),)
+            )
+
+    monkeypatch.setattr("nightshift.cli.app.build_delivery_service", lambda repo_root, config: FakeService())
+
+    result = CliRunner().invoke(app, ["run", "--issues", "GH-7", "--config", str(config_path), "--deliver"])
+
+    assert result.exit_code == 0
+    assert '"issues_accepted":1' in result.stdout.replace(" ", "").replace("\n", "")
+    assert "delivered=1" in result.stdout
+
+
+def test_run_command_with_deliver_skips_delivery_when_no_issue_is_accepted(monkeypatch, tmp_path: Path) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    _write_config(config_path, tmp_path)
+
+    monkeypatch.setattr(
+        "nightshift.cli.app.resolve_selected_issues",
+        lambda registry, issue_ids: SelectionResult(items=(SelectionItem(issue_id="GH-7", queue_priority="high"),)),
+    )
+    monkeypatch.setattr(
+        "nightshift.cli.app.run_batch",
+        lambda selection, run_one: BatchRunSummary(
+            batch_size=1,
+            issues_attempted=1,
+            issues_accepted=0,
+            stopped_early=True,
+            first_failure_issue_id="GH-7",
+        ),
+    )
+
+    class FakeService:
+        def deliver(self, request):
+            raise AssertionError("delivery should not be called when no issues were accepted")
+
+    monkeypatch.setattr("nightshift.cli.app.build_delivery_service", lambda repo_root, config: FakeService())
+
+    result = CliRunner().invoke(app, ["run", "--issues", "GH-7", "--config", str(config_path), "--deliver"])
+
+    assert result.exit_code == 1
+    assert "no accepted issues to deliver" in result.stderr

@@ -10,6 +10,9 @@ from nightshift.engines.registry import EngineRegistry
 from nightshift.orchestrator import RunOrchestrator
 from nightshift.orchestrator.recovery import RecoveryOrchestrator
 from nightshift.product.execution_selection import resolve_all_schedulable_issues, resolve_selected_issues, run_batch
+from nightshift.product.delivery import DeliveryRequest
+from nightshift.product.delivery.github_pr import create_github_pull_request
+from nightshift.product.delivery.service import DeliveryService
 from nightshift.product.issue_ingestion import (
     check_issue_admission,
     check_issue_provenance,
@@ -69,6 +72,15 @@ def build_run_orchestrator(repo_root: Path, config: object) -> RunOrchestrator:
 
 def build_issue_registry(repo_root: Path) -> IssueRegistry:
     return IssueRegistry(repo_root)
+
+
+def build_delivery_service(repo_root: Path, config: object) -> DeliveryService:
+    return DeliveryService(
+        repo_root=repo_root,
+        config=config,
+        registry=IssueRegistry(repo_root),
+        create_pull_request=create_github_pull_request,
+    )
 
 
 def build_recovery_orchestrator(repo_root: Path) -> RecoveryOrchestrator:
@@ -252,6 +264,7 @@ def run_one(
 def run(
     issues: str | None = typer.Option(None, "--issues"),
     run_all: bool = typer.Option(False, "--all"),
+    deliver: bool = typer.Option(False, "--deliver"),
     repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
     config: Path = typer.Option(..., "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
 ) -> None:
@@ -286,6 +299,38 @@ def run(
         )
         raise typer.Exit(1) from error
     typer.echo(summary.model_dump_json(indent=2, exclude_none=True))
+    if not deliver:
+        return
+
+    if summary.issues_accepted == 0:
+        typer.echo("no accepted issues to deliver", err=True)
+        raise typer.Exit(1)
+
+    delivery_service = build_delivery_service(repo_root, loaded_config)
+    delivery_request = DeliveryRequest(issue_ids=selection.issue_ids[: summary.issues_accepted])
+    delivery_result = delivery_service.deliver(delivery_request)
+    typer.echo(
+        f"delivered={len(delivery_result.delivered_issue_ids)} failed={len(delivery_result.failed_issue_ids)}"
+    )
+    if delivery_result.failed_issue_ids:
+        raise typer.Exit(1)
+
+
+@app.command("deliver")
+def deliver(
+    issues: str = typer.Option(..., "--issues"),
+    repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    config: Path = typer.Option(..., "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+) -> None:
+    loaded_config = load_config(config)
+    repo_root = _resolve_repo_root(repo, loaded_config)
+    delivery_service = build_delivery_service(repo_root, loaded_config)
+    delivery_request = DeliveryRequest(issue_ids=tuple(part.strip() for part in issues.split(",") if part.strip()))
+
+    delivery_result = delivery_service.deliver(delivery_request)
+    typer.echo(f"delivered={len(delivery_result.delivered_issue_ids)} failed={len(delivery_result.failed_issue_ids)}")
+    if delivery_result.failed_issue_ids:
+        raise typer.Exit(1)
 
 
 @app.command("recover")
