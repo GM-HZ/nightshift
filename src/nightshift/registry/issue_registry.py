@@ -16,6 +16,14 @@ from nightshift.store.filesystem import (
 
 
 class IssueRegistry:
+    _QUEUE_PRIORITY_ORDER = {
+        "urgent": 0,
+        "high": 1,
+        "medium": 2,
+        "normal": 2,
+        "low": 3,
+    }
+
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root)
 
@@ -48,7 +56,14 @@ class IssueRegistry:
 
     def list_schedulable_records(self) -> list[IssueRecord]:
         records = [record for record in self._all_records() if record.issue_state == IssueState.ready]
-        return sorted(records, key=lambda record: (record.queue_priority, record.issue_id))
+        return sorted(
+            records,
+            key=lambda record: (
+                self._QUEUE_PRIORITY_ORDER.get(record.queue_priority, len(self._QUEUE_PRIORITY_ORDER)),
+                record.queue_priority,
+                record.issue_id,
+            ),
+        )
 
     def set_queue_priority(self, issue_id: str, queue_priority: str) -> IssueRecord:
         updated = self._validated_update(issue_id, {"queue_priority": queue_priority, "updated_at": self._now()})

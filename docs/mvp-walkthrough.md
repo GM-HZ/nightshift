@@ -104,9 +104,10 @@ python -m nightshift.cli.main queue reprioritize NS-123 high --repo /path/to/rep
 
 ```bash
 python -m nightshift.cli.main run-one NS-123 \
-  --repo /path/to/repo \
   --config /path/to/repo/nightshift.yaml
 ```
+
+If `project.repo_path` is set in `nightshift.yaml`, `--repo` may be omitted. If both are provided, `--repo` wins.
 
 Success or rejection is printed on stdout. Durable state is written under `nightshift-data/`.
 
@@ -137,7 +138,8 @@ The command emits JSON including both `source_run_id` and `recovery_run_id`.
 
 ```bash
 python -m nightshift.cli.main report --repo /path/to/repo
-python -m nightshift.cli.main report --repo /path/to/repo --run RUN-20260328-001
+python -m nightshift.cli.main report --config /path/to/repo/nightshift.yaml
+python -m nightshift.cli.main report --config /path/to/repo/nightshift.yaml --run RUN-20260328-001
 ```
 
 Report semantics in the current MVP:
@@ -145,6 +147,7 @@ Report semantics in the current MVP:
 - reads only persisted run-scoped history from `nightshift-data/runs/<run_id>/`
 - prefers the active run when `--run` is omitted
 - otherwise falls back to the latest persisted run
+- writes `<run_id>.json` under `report.output_directory` when `--config` is provided
 
 ## Where To Look In Code
 

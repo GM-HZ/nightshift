@@ -156,6 +156,23 @@ def test_issue_registry_lists_schedulable_records(tmp_path: Path) -> None:
     assert [record.issue_id for record in records] == ["ISSUE-1"]
 
 
+def test_issue_registry_orders_schedulable_records_by_canonical_priority(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    registry.save_record(make_record("ISSUE-LOW", queue_priority="low"))
+    registry.save_record(make_record("ISSUE-URGENT", queue_priority="urgent"))
+    registry.save_record(make_record("ISSUE-MEDIUM", queue_priority="medium"))
+    registry.save_record(make_record("ISSUE-HIGH", queue_priority="high"))
+
+    records = registry.list_schedulable_records()
+
+    assert [record.issue_id for record in records] == [
+        "ISSUE-URGENT",
+        "ISSUE-HIGH",
+        "ISSUE-MEDIUM",
+        "ISSUE-LOW",
+    ]
+
+
 def test_issue_registry_updates_queue_priority_without_changing_contract_priority(tmp_path: Path) -> None:
     registry = IssueRegistry(tmp_path)
     contract = make_contract("ISSUE-1", priority="medium")

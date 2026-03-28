@@ -154,6 +154,47 @@ def test_registry_prefers_configured_default_before_alphabetic_fallback() -> Non
     assert resolved.name() == "codex"
 
 
+def test_registry_uses_configured_fallback_when_issue_contract_has_none() -> None:
+    @dataclass
+    class DummyAdapter:
+        adapter_name: str
+
+        def name(self) -> str:
+            return self.adapter_name
+
+        def capabilities(self) -> EngineCapabilities:
+            return EngineCapabilities()
+
+        def prepare(self, issue_contract: IssueContract, workspace: object, context_bundle: ContextBundle) -> object:
+            del issue_contract, workspace, context_bundle
+            return object()
+
+        def execute(self, prepared_invocation: object) -> EngineOutcome:
+            del prepared_invocation
+            return EngineOutcome(
+                engine_name=self.adapter_name,
+                engine_invocation_id="invocation",
+                outcome_type="success",
+                exit_code=0,
+                recoverable=False,
+                summary="ok",
+            )
+
+        def normalize_output(self, raw_result: object) -> EngineOutcome:
+            del raw_result
+            return self.execute(object())
+
+    registry = EngineRegistry(default_adapter_name="codex", fallback_adapter_name="claude")
+    codex = DummyAdapter("codex")
+    claude = DummyAdapter("claude")
+    registry.register(codex)
+    registry.register(claude)
+
+    fallback = registry.fallback_for(_make_issue_contract(primary=None, fallback=None), codex)
+
+    assert fallback is claude
+
+
 def test_registry_rejects_explicit_unavailable_preferences_instead_of_silent_default() -> None:
     @dataclass
     class DummyAdapter:

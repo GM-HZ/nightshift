@@ -13,9 +13,11 @@ class EngineRegistry:
         adapters: Iterable[EngineAdapter] | None = None,
         *,
         default_adapter_name: str | None = None,
+        fallback_adapter_name: str | None = None,
     ) -> None:
         self._adapters: dict[str, EngineAdapter] = {}
         self._default_adapter_name = default_adapter_name
+        self._fallback_adapter_name = fallback_adapter_name
         if adapters is not None:
             for adapter in adapters:
                 self.register(adapter)
@@ -46,11 +48,17 @@ class EngineRegistry:
         raise LookupError("no engine adapters have been registered")
 
     def is_fallback_eligible(self, issue_contract: IssueContract, current_adapter: EngineAdapter) -> bool:
-        fallback_name = issue_contract.engine_preferences.fallback
-        if fallback_name is None:
-            return False
+        return self.fallback_for(issue_contract, current_adapter) is not None
 
-        if fallback_name == current_adapter.name():
-            return False
-
-        return fallback_name in self._adapters
+    def fallback_for(self, issue_contract: IssueContract, current_adapter: EngineAdapter) -> EngineAdapter | None:
+        configured_names: tuple[str | None, ...] = (
+            issue_contract.engine_preferences.fallback,
+            self._fallback_adapter_name,
+        )
+        for fallback_name in configured_names:
+            if fallback_name is None or fallback_name == current_adapter.name():
+                continue
+            adapter = self._adapters.get(fallback_name)
+            if adapter is not None:
+                return adapter
+        return None

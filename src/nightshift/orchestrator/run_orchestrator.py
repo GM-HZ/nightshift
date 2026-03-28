@@ -28,6 +28,7 @@ class RunOrchestrator:
         workspace_manager: Any,
         engine_registry: Any,
         validation_gate: Any,
+        artifact_root: str | Path | None = None,
         id_factory: Callable[[str], str] | None = None,
         now_factory: Callable[[], datetime] | None = None,
     ) -> None:
@@ -36,12 +37,14 @@ class RunOrchestrator:
         self.workspace_manager = workspace_manager
         self.engine_registry = engine_registry
         self.validation_gate = validation_gate
+        self.artifact_root = Path(artifact_root) if artifact_root is not None else None
         self.id_factory = id_factory or self._default_id_factory
         self.now_factory = now_factory or self._default_now_factory
 
     def run_one(self, issue_id: str) -> RunOneResult:
         issue_contract = self.issue_registry.get_contract(issue_id)
         current_issue_record = self.issue_registry.get_record(issue_id)
+        self._ensure_schedulable(current_issue_record)
 
         run_id = self.id_factory("run")
         attempt_id = self.id_factory("attempt")
@@ -82,22 +85,42 @@ class RunOrchestrator:
             )
             self._append_event(run_id, "attempt_started", seq=2, issue_id=issue_id, attempt_id=attempt_id)
 
-            adapter = self.engine_registry.resolve(issue_contract)
             artifact_dir.mkdir(parents=True, exist_ok=True)
-            engine_capabilities_snapshot = _capabilities_snapshot(adapter)
-            prepared_invocation = adapter.prepare(
-                issue_contract,
-                workspace,
-                ContextBundle(
-                    issue_id=issue_id,
-                    prompt=self._render_prompt(issue_contract),
-                    artifact_dir=artifact_dir,
-                    worktree_path=workspace.worktree_path,
-                    run_id=run_id,
-                    attempt_id=attempt_id,
-                ),
+            adapter, engine_outcome = self._execute_with_fallback(
+                issue_contract=issue_contract,
+                workspace=workspace,
+                issue_id=issue_id,
+                run_id=run_id,
+                attempt_id=attempt_id,
+                artifact_dir=artifact_dir,
             )
-            engine_outcome = adapter.execute(prepared_invocation)
+            engine_capabilities_snapshot = _capabilities_snapshot(adapter)
+
+            if engine_outcome.outcome_type != "success":
+                failed_attempt = AttemptRecord(
+                    attempt_id=attempt_id,
+                    issue_id=issue_id,
+                    run_id=run_id,
+                    engine_name=adapter.name(),
+                    engine_invocation_id=engine_outcome.engine_invocation_id,
+                    engine_capabilities_snapshot=engine_capabilities_snapshot,
+                    attempt_state=AttemptState.aborted,
+                    branch_name=workspace.branch_name,
+                    worktree_path=str(workspace.worktree_path),
+                    pre_edit_commit_sha=snapshot.pre_edit_commit_sha,
+                    preflight_passed=True,
+                    preflight_summary="workspace prepared",
+                    engine_outcome=engine_outcome.summary,
+                    recoverable=engine_outcome.recoverable,
+                    retry_recommended=engine_outcome.recoverable,
+                    summary=engine_outcome.summary,
+                    artifact_dir=str(artifact_dir),
+                    started_at=started_at,
+                    ended_at=self.now_factory(),
+                    duration_ms=0,
+                )
+                self.state_store.save_attempt_record(failed_attempt)
+                raise RuntimeError(f"engine outcome {engine_outcome.outcome_type} cannot be accepted")
 
             attempt_record = AttemptRecord(
                 attempt_id=attempt_id,
@@ -288,7 +311,72 @@ class RunOrchestrator:
         )
 
     def _artifact_dir(self, run_id: str, attempt_id: str) -> Path:
-        return Path(self.state_store.root) / "nightshift-data" / "runs" / run_id / "artifacts" / "attempts" / attempt_id
+        base_dir = self.artifact_root
+        if base_dir is None:
+            base_dir = Path(self.state_store.root) / "nightshift-data" / "runs"
+        return Path(base_dir) / run_id / "artifacts" / "attempts" / attempt_id
+
+    def _ensure_schedulable(self, issue_record: IssueRecord) -> None:
+        if issue_record.issue_state != IssueState.ready:
+            raise ValueError(f"issue {issue_record.issue_id} is not schedulable from state {issue_record.issue_state}")
+
+    def _execute_with_fallback(
+        self,
+        *,
+        issue_contract: Any,
+        workspace: Any,
+        issue_id: str,
+        run_id: str,
+        attempt_id: str,
+        artifact_dir: Path,
+    ) -> tuple[Any, Any]:
+        adapter = self.engine_registry.resolve(issue_contract)
+        outcome = self._execute_adapter(adapter, issue_contract, workspace, issue_id, run_id, attempt_id, artifact_dir)
+        if outcome.outcome_type == "success":
+            return adapter, outcome
+
+        fallback_adapter = None
+        fallback_for = getattr(self.engine_registry, "fallback_for", None)
+        if callable(fallback_for):
+            fallback_adapter = fallback_for(issue_contract, adapter)
+
+        if fallback_adapter is None:
+            return adapter, outcome
+
+        fallback_outcome = self._execute_adapter(
+            fallback_adapter,
+            issue_contract,
+            workspace,
+            issue_id,
+            run_id,
+            attempt_id,
+            artifact_dir,
+        )
+        return fallback_adapter, fallback_outcome
+
+    def _execute_adapter(
+        self,
+        adapter: Any,
+        issue_contract: Any,
+        workspace: Any,
+        issue_id: str,
+        run_id: str,
+        attempt_id: str,
+        artifact_dir: Path,
+    ) -> Any:
+        prepared_invocation = adapter.prepare(
+            issue_contract,
+            workspace,
+            ContextBundle(
+                issue_id=issue_id,
+                prompt=self._render_prompt(issue_contract),
+                artifact_dir=artifact_dir,
+                worktree_path=workspace.worktree_path,
+                run_id=run_id,
+                attempt_id=attempt_id,
+            ),
+        )
+        return adapter.execute(prepared_invocation)
 
     def _render_prompt(self, issue_contract: Any) -> str:
         parts = [issue_contract.title, issue_contract.goal]

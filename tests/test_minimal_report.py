@@ -142,3 +142,26 @@ def test_report_command_defaults_to_active_run_and_emits_json(tmp_path: Path) ->
     payload = json.loads(result.stdout)
     assert payload["run_id"] == "run-1"
     assert payload["issue_snapshot_count"] == 1
+
+
+def test_report_command_can_use_repo_from_config_and_persist_output_file(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    reports_dir = tmp_path / "reports"
+    config_path = tmp_path / "nightshift.yaml"
+    config_path.write_text(f"project:\n  repo_path: {repo_root}\n  main_branch: main\nrunner:\n  default_engine: codex\n  issue_timeout_seconds: 1\n  overnight_timeout_seconds: 1\nvalidation:\n  enabled: true\nissue_defaults:\n  default_priority: high\n  default_forbidden_paths: [secrets]\n  default_test_edit_policy:\n    can_add_tests: true\n    can_modify_existing_tests: true\n    can_weaken_assertions: false\n    requires_test_change_reason: true\n  default_attempt_limits:\n    max_files_changed: 1\n    max_lines_added: 1\n    max_lines_deleted: 1\n  default_timeouts:\n    command_seconds: 1\n    issue_budget_seconds: 1\nretry:\n  max_retries: 1\n  retry_policy: never\n  failure_circuit_breaker: false\nworkspace:\n  worktree_root: .nightshift/worktrees\n  artifact_root: nightshift-data/runs\nalerts:\n  enabled_channels: []\n  severity_thresholds:\n    info: info\n    warning: warning\n    critical: critical\nreport:\n  output_directory: {reports_dir}\n  summary_verbosity: concise\n")
+    store = StateStore(repo_root)
+    store.save_run_state(make_run_state("run-1"))
+    store.set_active_run("run-1")
+    store.save_run_issue_snapshot("run-1", make_issue_record("ISSUE-1", issue_state=IssueState.done))
+    store.save_attempt_record(make_attempt_record("ATT-1", "ISSUE-1", "run-1", state=AttemptState.accepted))
+    store.append_event(make_event(1, "run-1", "run_started"))
+
+    result = CliRunner().invoke(app, ["report", "--config", str(config_path)])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["run_id"] == "run-1"
+    report_path = reports_dir / "run-1.json"
+    assert report_path.is_file()
+    assert json.loads(report_path.read_text())["run_id"] == "run-1"

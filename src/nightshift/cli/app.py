@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import typer
 
@@ -38,8 +39,10 @@ def build_run_orchestrator(repo_root: Path, config: object) -> RunOrchestrator:
         engine_registry=EngineRegistry(
             adapters,
             default_adapter_name=getattr(config.runner, "default_engine", None),
+            fallback_adapter_name=getattr(config.runner, "fallback_engine", None),
         ),
         validation_gate=validation_gate,
+        artifact_root=getattr(config.workspace, "artifact_root", None),
     )
 
 
@@ -55,14 +58,38 @@ def build_recovery_orchestrator(repo_root: Path) -> RecoveryOrchestrator:
     )
 
 
+def _resolve_repo_root(repo: Path | None, config: object | None = None) -> Path:
+    if repo is not None:
+        return repo
+    if config is not None:
+        configured_repo = getattr(getattr(config, "project", object()), "repo_path", None)
+        if configured_repo:
+            return Path(configured_repo)
+    raise typer.BadParameter("either --repo or a config with project.repo_path is required")
+
+
+def _write_report_output(report_model: object, config: object | None) -> None:
+    if config is None:
+        return
+
+    output_directory = getattr(getattr(config, "report", object()), "output_directory", None)
+    if not output_directory:
+        return
+
+    report_path = Path(output_directory) / f"{getattr(report_model, 'run_id')}.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report_model.model_dump(mode="json"), indent=2))
+
+
 @app.command("run-one")
 def run_one(
     issue_id: str,
-    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
     config: Path = typer.Option(..., "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
 ) -> None:
     loaded_config = load_config(config)
-    orchestrator = build_run_orchestrator(repo, loaded_config)
+    repo_root = _resolve_repo_root(repo, loaded_config)
+    orchestrator = build_run_orchestrator(repo_root, loaded_config)
     result = orchestrator.run_one(issue_id)
     status = "accepted" if result.accepted else "rejected"
     typer.echo(f"{result.issue_id} {status} in {result.run_id} ({result.attempt_id})")
@@ -80,11 +107,15 @@ def recover(
 
 @app.command("report")
 def report(
-    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    config: Path | None = typer.Option(None, "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
     run: str | None = typer.Option(None, "--run"),
 ) -> None:
-    state_store = StateStore(repo)
+    loaded_config = load_config(config) if config is not None else None
+    repo_root = _resolve_repo_root(repo, loaded_config)
+    state_store = StateStore(repo_root)
     report_model = build_minimal_report(state_store, run)
+    _write_report_output(report_model, loaded_config)
     typer.echo(report_model.model_dump_json(indent=2, exclude_none=True))
 
 
