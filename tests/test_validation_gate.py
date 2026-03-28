@@ -129,6 +129,25 @@ def test_validation_gate_allows_optional_static_validation_to_fail_without_block
     assert result.stages[3].skipped is True
 
 
+def test_validation_gate_requires_required_static_validation() -> None:
+    contract = make_contract(
+        issue_validation=make_stage("python3 -c \"print('issue')\"", required=True),
+        regression_validation=make_stage("python3 -c \"print('regression')\"", required=True),
+        static_validation=VerificationStageContract(
+            required=True,
+            commands=("python3 -c \"import sys; sys.exit(1)\"",),
+            pass_condition=PassConditionContract(type="exit_code", expected=0),
+        ),
+    )
+
+    result = validate(contract, Path("."), make_attempt_record())
+
+    assert result.passed is False
+    assert result.failed_stage == "static_validation"
+    assert result.stages[2].required is True
+    assert result.stages[2].passed is False
+
+
 def test_validation_gate_honors_pass_conditions() -> None:
     contract = make_contract(
         issue_validation=VerificationStageContract(
@@ -203,6 +222,23 @@ def test_validation_gate_enforces_command_timeout() -> None:
     assert result.stages[0].command_results[0].exit_code == -1
     assert result.stages[0].command_results[0].passed is False
     assert "timed out" in result.stages[0].command_results[0].stderr.lower()
+
+
+def test_validation_gate_does_not_treat_spawn_failure_as_expected_exit_code() -> None:
+    contract = make_contract(
+        issue_validation=VerificationStageContract(
+            required=True,
+            commands=("definitely-not-a-real-command",),
+            pass_condition=PassConditionContract(type="exit_code", expected=-1),
+        ),
+        regression_validation=make_stage("python3 -c \"print('regression')\"", required=True),
+    )
+
+    result = validate(contract, Path("."), make_attempt_record())
+
+    assert result.passed is False
+    assert result.failed_stage == "issue_validation"
+    assert result.stages[0].command_results[0].passed is False
 
 
 def test_evaluate_acceptance_returns_passed_flag() -> None:

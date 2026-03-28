@@ -63,6 +63,8 @@ def validate(issue_contract: IssueContract, workspace: object, attempt_record: A
 
     static_stage = _run_stage("static_validation", issue_contract.verification.static_validation, workspace_path, command_timeout)
     stages.append(static_stage)
+    if static_stage.required and not static_stage.passed:
+        return _failure_result("static_validation", stages)
 
     promotion_stage = _run_stage(
         "promotion_validation",
@@ -120,7 +122,7 @@ def _run_stage(
     command_results: list[CommandResult] = []
     for command in stage.commands:
         completed = _run_command(command, workspace_path, command_timeout)
-        passed = _command_passed(completed.exit_code, stage.pass_condition)
+        passed = completed.passed and _command_passed(completed.exit_code, stage.pass_condition)
         command_results.append(
             CommandResult(
                 command=command,
@@ -185,7 +187,7 @@ def _run_command(command: str, workspace_path: Path, command_timeout: int | None
     return CommandResult(
         command=command,
         exit_code=completed.returncode,
-        passed=False,
+        passed=True,
         stdout=completed.stdout,
         stderr=completed.stderr,
     )
