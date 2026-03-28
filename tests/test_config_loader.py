@@ -73,6 +73,70 @@ report:
     assert config.workspace.worktree_root == "/workspace/nightshift/.worktrees"
     assert config.alerts.enabled_channels == ["console"]
     assert config.report.summary_verbosity == "concise"
+    assert config.product.issue_ingestion.enabled is False
+    assert config.product.issue_ingestion.required_label == "nightshift"
+
+
+def test_load_config_reads_product_issue_ingestion_settings(tmp_path: Path) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    config_path.write_text(
+        """
+project:
+  repo_path: /workspace/nightshift
+  main_branch: main
+runner:
+  default_engine: gpt-5
+  issue_timeout_seconds: 900
+  overnight_timeout_seconds: 28800
+validation:
+  enabled: true
+issue_defaults:
+  default_priority: high
+  default_forbidden_paths:
+    - secrets
+  default_test_edit_policy:
+    can_add_tests: true
+    can_modify_existing_tests: true
+    can_weaken_assertions: false
+    requires_test_change_reason: true
+  default_attempt_limits:
+    max_files_changed: 3
+    max_lines_added: 200
+    max_lines_deleted: 50
+  default_timeouts:
+    command_seconds: 900
+    issue_budget_seconds: 7200
+retry:
+  max_retries: 3
+  retry_policy: exponential_backoff
+  failure_circuit_breaker: true
+workspace:
+  worktree_root: /workspace/nightshift/.worktrees
+  artifact_root: /workspace/nightshift/.artifacts
+alerts:
+  enabled_channels: []
+  severity_thresholds:
+    info: info
+    warning: warning
+    critical: critical
+report:
+  output_directory: /workspace/nightshift/.reports
+  summary_verbosity: concise
+product:
+  issue_ingestion:
+    enabled: true
+    allowed_authors:
+      - nightshift-bot
+      - gongmeng
+    required_label: nightshift
+"""
+    )
+
+    config = load_config(config_path)
+
+    assert config.product.issue_ingestion.enabled is True
+    assert config.product.issue_ingestion.allowed_authors == ["nightshift-bot", "gongmeng"]
+    assert config.product.issue_ingestion.required_label == "nightshift"
 
 
 def test_load_config_requires_explicit_default_forbidden_paths(tmp_path: Path) -> None:

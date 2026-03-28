@@ -5,7 +5,7 @@ NightShift is an overnight AI coding harness. This repository now contains both 
 ## Current Status
 
 - Current implementation target: `v4.2.1`
-- Current CLI surface: `run-one`, `recover`, `report`, `queue status`, `queue show`, `queue reprioritize`
+- Current CLI surface: `run-one`, `recover`, `report`, `queue status`, `queue show`, `queue reprioritize`, `issue ingest-github`
 - Current engine adapters: `codex`, `claude`
 - Current scope: single-issue execution flow plus persistence, validation, recovery, and run-scoped reporting
 
@@ -61,7 +61,7 @@ What is intentionally not in the MVP yet:
 
 The current branch is intentionally not a full `v4.2.1` product-complete implementation. These gaps are known and not bugs in the current MVP scope:
 
-- no issue ingestion flow yet: contracts and current issue records must still be seeded before execution
+- no end-to-end intake workflow yet: a minimal `issue ingest-github` path exists, but splitter-driven issue creation, proposal review UI, and batch admission are still absent
 - no multi-issue overnight control loop yet: `run-one` exists, but `run`, `run --daemon`, and `stop` are not implemented
 - no queue admission command yet: `queue add` is still absent
 - no delivery automation yet: branch handoff, PR opening, review sync, and merge workflows are not wired

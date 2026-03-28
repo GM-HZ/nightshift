@@ -9,6 +9,13 @@ from nightshift.engines.claude_code_adapter import ClaudeCodeAdapter
 from nightshift.engines.registry import EngineRegistry
 from nightshift.orchestrator import RunOrchestrator
 from nightshift.orchestrator.recovery import RecoveryOrchestrator
+from nightshift.product.issue_ingestion import (
+    check_issue_admission,
+    check_issue_provenance,
+    fetch_github_issue,
+    materialize_issue,
+    parse_github_issue_template,
+)
 from nightshift.registry.issue_registry import IssueRegistry
 from nightshift.reporting.minimal_report import build_minimal_report
 from nightshift.store.state_store import StateStore
@@ -17,7 +24,9 @@ from nightshift.workspace.manager import WorkspaceManager
 
 app = typer.Typer(help="NightShift kernel CLI.")
 queue_app = typer.Typer(help="Inspect and mutate the current issue queue.")
+issue_app = typer.Typer(help="Ingest product-layer issues into the NightShift kernel queue.")
 app.add_typer(queue_app, name="queue")
+app.add_typer(issue_app, name="issue")
 
 
 @app.callback(invoke_without_command=True)
@@ -172,3 +181,34 @@ def queue_reprioritize(
     issue_registry = build_issue_registry(repo)
     updated = issue_registry.set_queue_priority(issue_id, priority)
     typer.echo(f"{updated.issue_id} queue_priority={updated.queue_priority}")
+
+
+@issue_app.command("ingest-github")
+def issue_ingest_github(
+    repo_full_name: str = typer.Option(..., "--repo-full-name"),
+    issue: int = typer.Option(..., "--issue"),
+    repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    config: Path = typer.Option(..., "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+) -> None:
+    loaded_config = load_config(config)
+    repo_root = _resolve_repo_root(repo, loaded_config)
+    github_issue = fetch_github_issue(repo_full_name, issue)
+    parsed = parse_github_issue_template(github_issue)
+
+    provenance = check_issue_provenance(parsed, loaded_config)
+    if not provenance.accepted:
+        for reason in provenance.reasons:
+            typer.echo(f"provenance rejected: {reason}", err=True)
+        raise typer.Exit(1)
+
+    admission = check_issue_admission(parsed, loaded_config)
+    if not admission.accepted or admission.draft is None:
+        for reason in admission.reasons:
+            typer.echo(f"admission rejected: {reason}", err=True)
+        raise typer.Exit(1)
+
+    contract, record = materialize_issue(repo_root, admission.draft, loaded_config)
+    typer.echo(
+        f"ingested {contract.issue_id} from {repo_full_name}#{issue} "
+        f"issue_state={record.issue_state} attempt_state={record.attempt_state}"
+    )

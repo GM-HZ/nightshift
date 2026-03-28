@@ -53,9 +53,20 @@ The main design references for the product workflow side are:
 - `docs/superpowers/specs/nightshift-v4.2.1/06-cli-config-persistence-alerting.md`
 - `docs/superpowers/specs/nightshift-v4.2.1/07-language-and-phasing.md`
 
+Current product-slice design docs:
+
+- `docs/architecture/product/issue-ingestion-mvp.md`
+
+Current product-slice implementation status:
+
+- `issue ingest-github` now exists as the first product-layer bridge into the kernel
+- it currently supports one GitHub issue at a time
+- it enforces provenance and admission before writing `IssueContract` and `IssueRecord`
+- richer intake flow such as splitter-driven issue creation, proposal review UX, and batch admission still remain future work
+
 ## Current Next-Step Theme
 
-The next meaningful step above the kernel is a minimal issue-ingestion path that can turn an external request into:
+The next meaningful step above the kernel is expanding the current minimal issue-ingestion path so it can turn external requests into:
 
 - immutable `IssueContract`
 - current `IssueRecord`

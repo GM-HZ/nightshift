@@ -107,6 +107,20 @@ class ReportConfig(BaseModel):
     summary_verbosity: NonEmptyStr
 
 
+class IssueIngestionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    allowed_authors: list[NonEmptyStr] = Field(default_factory=list)
+    required_label: NonEmptyStr = "nightshift"
+
+
+class ProductConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    issue_ingestion: IssueIngestionConfig = Field(default_factory=IssueIngestionConfig)
+
+
 class NightShiftConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -118,3 +132,4 @@ class NightShiftConfig(BaseModel):
     workspace: WorkspaceConfig
     alerts: AlertsConfig
     report: ReportConfig
+    product: ProductConfig = Field(default_factory=ProductConfig)
