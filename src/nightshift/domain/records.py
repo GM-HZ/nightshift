@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, model_validator
 
 from .enums import AlertSeverity, AttemptState, DeliveryState, IssueState, RunState as RunStateEnum
 
@@ -14,7 +14,7 @@ class AttemptValidationResult(BaseModel):
     passed: bool
     summary: str | None = None
     details: str | dict[str, Any] | None = None
-    exit_code: int | None = None
+    exit_code: NonNegativeInt | None = None
     command: str | None = None
     notes: str | None = None
 
@@ -36,7 +36,7 @@ class IssueRecord(BaseModel):
     accepted_attempt_id: str | None = None
     branch_name: str | None = None
     worktree_path: str | None = None
-    retry_count: int = 0
+    retry_count: NonNegativeInt = 0
     deferred_reason: str | None = None
     last_summary: str | None = None
     created_at: datetime
@@ -100,7 +100,7 @@ class AttemptRecord(BaseModel):
     artifact_dir: str | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
-    duration_ms: int | None = None
+    duration_ms: NonNegativeInt | None = None
 
     @model_validator(mode="after")
     def validate_attempt_state(self) -> "AttemptRecord":
@@ -126,20 +126,20 @@ class RunState(BaseModel):
     selected_engine_policy: str | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
-    issues_attempted: int = 0
-    issues_completed: int = 0
-    issues_blocked: int = 0
-    issues_deferred: int = 0
+    issues_attempted: NonNegativeInt = 0
+    issues_completed: NonNegativeInt = 0
+    issues_blocked: NonNegativeInt = 0
+    issues_deferred: NonNegativeInt = 0
     active_issue_id: str | None = None
     active_attempt_id: str | None = None
     active_worktrees: list[str] = Field(default_factory=list)
-    alert_counts: dict[str, int] = Field(default_factory=dict)
+    alert_counts: dict[str, NonNegativeInt] = Field(default_factory=dict)
 
 
 class EventRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    seq: int
+    seq: NonNegativeInt
     run_id: str
     issue_id: str | None = None
     attempt_id: str | None = None

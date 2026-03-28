@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, StrictInt, model_validator
 
 from .enums import IssueKind
 
@@ -40,6 +40,9 @@ class VerificationStageContract(BaseModel):
 
     @model_validator(mode="after")
     def validate_stage_shape(self) -> "VerificationStageContract":
+        if self.required and not self.commands:
+            raise ValueError("required verification stages must declare at least one command")
+
         if self.commands and self.pass_condition is None:
             raise ValueError("verification stages with commands require a pass_condition")
 
@@ -73,16 +76,16 @@ TestEditPolicyContract.__test__ = False
 class AttemptLimitsContract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    max_files_changed: int | None = None
-    max_lines_added: int | None = None
-    max_lines_deleted: int | None = None
+    max_files_changed: NonNegativeInt | None = None
+    max_lines_added: NonNegativeInt | None = None
+    max_lines_deleted: NonNegativeInt | None = None
 
 
 class TimeoutsContract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    command_seconds: int | None = None
-    issue_budget_seconds: int | None = None
+    command_seconds: PositiveInt | None = None
+    issue_budget_seconds: PositiveInt | None = None
 
 
 class IssueContract(BaseModel):
@@ -124,6 +127,9 @@ class IssueContract(BaseModel):
             self.verification.promotion_validation,
         )
         return any(
-            stage is not None and len(stage.commands) > 0 and stage.pass_condition is not None
+            stage is not None
+            and stage.required
+            and len(stage.commands) > 0
+            and stage.pass_condition is not None
             for stage in stages
         )

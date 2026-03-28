@@ -253,6 +253,11 @@ def test_execution_contract_rejects_commands_without_pass_condition() -> None:
         )
 
 
+def test_required_verification_stage_rejects_empty_commands() -> None:
+    with pytest.raises(ValidationError):
+        VerificationStageContract(required=True, commands=(), pass_condition=None)
+
+
 def test_execution_contract_rejects_unknown_pass_condition_type() -> None:
     with pytest.raises(ValidationError):
         IssueContract(
@@ -316,6 +321,35 @@ def test_execution_contract_rejects_malformed_secondary_stage() -> None:
         )
 
 
+def test_execution_contract_rejects_optional_only_verification() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(
+                issue_validation=VerificationStageContract(
+                    required=False,
+                    commands=("pytest",),
+                    pass_condition=PassConditionContract(type="exit_code", expected=0),
+                )
+            ),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
 @pytest.mark.parametrize(
     "pass_condition",
     (
@@ -326,6 +360,20 @@ def test_execution_contract_rejects_malformed_secondary_stage() -> None:
 def test_pass_condition_contract_rejects_mismatched_expected_type(pass_condition: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         PassConditionContract.model_validate(pass_condition)
+
+
+@pytest.mark.parametrize(
+    ("factory", "kwargs"),
+    (
+        (AttemptLimitsContract, {"max_files_changed": -1}),
+        (AttemptLimitsContract, {"max_lines_added": -1}),
+        (TimeoutsContract, {"command_seconds": -1}),
+        (TimeoutsContract, {"issue_budget_seconds": -1}),
+    ),
+)
+def test_contract_numeric_fields_reject_negative_values(factory, kwargs) -> None:
+    with pytest.raises(ValidationError):
+        factory(**kwargs)
 
 
 def test_execution_contract_rejects_empty_allowed_paths() -> None:
@@ -446,6 +494,37 @@ def test_attempt_record_requires_preflight_failed_to_be_false() -> None:
         )
 
     assert "preflight_failed attempts require preflight_passed to be False" in str(exc_info.value)
+
+
+def test_issue_record_rejects_negative_retry_count() -> None:
+    with pytest.raises(ValidationError):
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "draft",
+                "attempt_state": "pending",
+                "delivery_state": "none",
+                "queue_priority": "high",
+                "retry_count": -1,
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+
+def test_attempt_record_rejects_negative_duration_ms() -> None:
+    with pytest.raises(ValidationError):
+        AttemptRecord.model_validate(
+            {
+                "attempt_id": "ATT-1",
+                "issue_id": "ISSUE-1",
+                "run_id": "RUN-1",
+                "engine_name": "gpt-5",
+                "engine_invocation_id": "INV-1",
+                "attempt_state": "pending",
+                "duration_ms": -1,
+            }
+        )
 
 
 def test_issue_record_exposes_delivery_fields() -> None:

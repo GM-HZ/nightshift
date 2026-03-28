@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt
 
 
 class ProjectConfig(BaseModel):
@@ -15,8 +15,8 @@ class RunnerConfig(BaseModel):
 
     default_engine: str
     fallback_engine: str | None = None
-    issue_timeout_seconds: int
-    overnight_timeout_seconds: int
+    issue_timeout_seconds: PositiveInt
+    overnight_timeout_seconds: PositiveInt
 
 
 class ValidationConfig(BaseModel):
@@ -43,16 +43,16 @@ TestEditPolicyConfig.__test__ = False
 class AttemptLimitsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    max_files_changed: int | None = None
-    max_lines_added: int | None = None
-    max_lines_deleted: int | None = None
+    max_files_changed: NonNegativeInt | None = None
+    max_lines_added: NonNegativeInt | None = None
+    max_lines_deleted: NonNegativeInt | None = None
 
 
 class TimeoutsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    command_seconds: int | None = None
-    issue_budget_seconds: int | None = None
+    command_seconds: PositiveInt | None = None
+    issue_budget_seconds: PositiveInt | None = None
 
 
 class IssueDefaultsConfig(BaseModel):
@@ -68,7 +68,7 @@ class IssueDefaultsConfig(BaseModel):
 class RetryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    max_retries: int
+    max_retries: NonNegativeInt
     retry_policy: str
     failure_circuit_breaker: bool
 
