@@ -86,6 +86,7 @@ An issue is deliverable only if all of the following are true:
 - `IssueRecord.worktree_path` is present
 - the worktree still exists
 - the worktree has a non-empty diff relative to the target base branch, or a commit has not yet been created for delivery
+- all changed paths remain within `IssueContract.allowed_paths`
 
 Delivery must fail closed if any of these are not true.
 
@@ -151,21 +152,23 @@ If `IssueRecord.delivery_ref` is already present, delivery should fail with a cl
 
 ## Delivery State Model
 
-The first version uses these delivery states:
+The first version uses the existing V4.2.1 delivery states already present in the domain model:
 
 - `none`
-- `submitted`
-- `failed`
+- `branch_ready`
+- `pr_opened`
 
 Semantics:
 
 - `none`: no delivery has been attempted
-- `submitted`: PR creation succeeded and linkage was recorded
-- `failed`: delivery was attempted but did not complete
+- `branch_ready`: the accepted branch has been prepared for submission
+- `pr_opened`: PR creation succeeded and linkage was recorded
 
 Failure to deliver must not rewrite acceptance state.
 
 An accepted result remains accepted even if push or PR creation fails.
+
+Because the current V4.2.1 domain model does not define an explicit delivery-failed state, failed delivery attempts should leave `IssueRecord.delivery_state` at `none` until a branch or PR milestone is actually reached. Failure is surfaced through command output and can later be promoted into richer alerting or reporting.
 
 ## Failure Handling
 
@@ -181,7 +184,7 @@ Typical failure points:
 The MVP behavior should be:
 
 - stop delivery for the affected issue
-- record `delivery_state=failed`
+- preserve `delivery_state=none` unless branch or PR submission actually succeeded
 - preserve accepted execution state
 - emit operator-friendly output showing where to inspect the failure
 
@@ -236,8 +239,8 @@ The MVP should be verified at three levels.
 ### Service Tests
 
 - accepted issue with valid worktree creates commit/push/PR via seams
-- push failure records `delivery_state=failed`
-- PR creation failure records `delivery_state=failed`
+- push failure preserves `delivery_state=none`
+- PR creation failure preserves `delivery_state=none`
 
 ### Workflow Rehearsal
 
@@ -248,7 +251,7 @@ Use the already-validated Chinese README flow and extend it one step further:
 Success for the full rehearsal means:
 
 - the issue remains `done + accepted`
-- `delivery_state=submitted`
+- `delivery_state=pr_opened`
 - `delivery_ref` points at the created PR
 
 ## Recommended Implementation Order

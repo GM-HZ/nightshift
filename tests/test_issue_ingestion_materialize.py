@@ -61,6 +61,7 @@ def test_materialize_issue_writes_contract_and_record(tmp_path: Path) -> None:
     assert contract.verification.issue_validation.commands == ("python3 -m pytest tests/test_cli_smoke.py -q",)
     assert contract.verification.regression_validation is not None
     assert contract.verification.regression_validation.commands == ("python3 -m pytest tests/test_cli_smoke.py -q",)
+    assert contract.notes == "Source GitHub issue: GM-HZ/nightshift#1\n\nDocs-only change."
     assert record.issue_state == IssueState.ready
     assert record.attempt_state == AttemptState.pending
     assert record.delivery_state == DeliveryState.none

@@ -15,7 +15,12 @@ class DeliverabilityResult(BaseModel):
     reason: str | None = None
 
 
-def evaluate_deliverability(contract: IssueContract, record: IssueRecord) -> DeliverabilityResult:
+def evaluate_deliverability(
+    contract: IssueContract,
+    record: IssueRecord,
+    *,
+    changed_paths: tuple[str, ...],
+) -> DeliverabilityResult:
     if contract.issue_id != record.issue_id:
         return DeliverabilityResult(allowed=False, reason="contract and record issue ids do not match")
 
@@ -34,4 +39,23 @@ def evaluate_deliverability(contract: IssueContract, record: IssueRecord) -> Del
     if not Path(record.worktree_path).exists():
         return DeliverabilityResult(allowed=False, reason=f"issue {record.issue_id} worktree does not exist")
 
+    if not changed_paths:
+        return DeliverabilityResult(allowed=False, reason=f"issue {record.issue_id} has no staged changes to deliver")
+
+    disallowed = tuple(path for path in changed_paths if not _path_allowed(path, contract.allowed_paths))
+    if disallowed:
+        return DeliverabilityResult(
+            allowed=False,
+            reason=f"issue {record.issue_id} has changes outside allowed_paths: {', '.join(disallowed)}",
+        )
+
     return DeliverabilityResult(allowed=True)
+
+
+def _path_allowed(path: str, allowed_paths: tuple[str, ...]) -> bool:
+    normalized = path.strip().lstrip("./")
+    for allowed in allowed_paths:
+        allowed_normalized = allowed.strip().lstrip("./").rstrip("/")
+        if normalized == allowed_normalized or normalized.startswith(f"{allowed_normalized}/"):
+            return True
+    return False

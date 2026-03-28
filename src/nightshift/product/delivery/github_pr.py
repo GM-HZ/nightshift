@@ -38,7 +38,7 @@ def render_pr_payload(
     *,
     repo_full_name: str,
     issue_id: str,
-    source_issue_number: int | None,
+    source_issue_ref: str | None,
     title: str,
     acceptance: tuple[str, ...],
     verification: VerificationContract,
@@ -46,7 +46,7 @@ def render_pr_payload(
     base_branch: str = "master",
 ) -> PullRequestPayload:
     verification_commands = _collect_verification_commands(verification)
-    issue_ref = f"#{source_issue_number}" if source_issue_number is not None else issue_id
+    issue_ref = source_issue_ref or issue_id
     body_lines = [
         "## Summary",
         f"- Delivered by NightShift for {issue_ref}",

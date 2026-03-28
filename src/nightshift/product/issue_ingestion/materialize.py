@@ -36,6 +36,8 @@ def materialize_issue(
 
 
 def _build_contract(draft: AdmittedIssueDraft, config: NightShiftConfig) -> IssueContract:
+    source_note = f"Source GitHub issue: {draft.repo_full_name}#{draft.source_issue_number}"
+    notes = source_note if not draft.notes else f"{source_note}\n\n{draft.notes}"
     return IssueContract(
         issue_id=draft.issue_id,
         title=draft.title,
@@ -65,7 +67,7 @@ def _build_contract(draft: AdmittedIssueDraft, config: NightShiftConfig) -> Issu
         timeouts=TimeoutsContract.model_validate(config.issue_defaults.default_timeouts.model_dump(mode="json")),
         priority=draft.priority,
         acceptance=draft.acceptance_criteria,
-        notes=draft.notes,
+        notes=notes,
     )
 
 

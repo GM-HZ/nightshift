@@ -37,7 +37,7 @@ def test_render_pr_payload_contains_title_and_verification_commands() -> None:
     payload = render_pr_payload(
         repo_full_name="GM-HZ/nightshift",
         issue_id="GH-7",
-        source_issue_number=7,
+        source_issue_ref="GM-HZ/nightshift#7",
         title="增加中文 README 说明",
         acceptance=("仓库根目录存在 README.zh-CN.md",),
         verification=_verification(),
@@ -47,7 +47,7 @@ def test_render_pr_payload_contains_title_and_verification_commands() -> None:
     assert "GH-7" in payload.title
     assert "Verification" in payload.body
     assert "README.zh-CN.md" in payload.body
-    assert "#7" in payload.body
+    assert "GM-HZ/nightshift#7" in payload.body
 
 
 def test_render_pr_title_uses_issue_id_and_title() -> None:

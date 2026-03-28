@@ -82,6 +82,7 @@ def _make_contract(issue_id: str) -> IssueContract:
         attempt_limits=AttemptLimitsContract(),
         timeouts=TimeoutsContract(),
         acceptance=("仓库根目录存在 README.zh-CN.md",),
+        notes="Source GitHub issue: GM-HZ/nightshift#7",
     )
 
 
@@ -120,7 +121,8 @@ def test_service_delivers_single_accepted_issue_and_updates_registry(tmp_path: P
         repo_root=tmp_path,
         config=_config(tmp_path),
         registry=registry,
-        git_add=lambda worktree_path: calls.append(("add", str(worktree_path))),
+        git_add=lambda worktree_path, changed_paths: calls.append(("add", str(worktree_path), *changed_paths)),
+        git_changed_paths=lambda worktree_path: ("README.md",),
         git_commit=lambda worktree_path, message: calls.append(("commit", str(worktree_path), message)),
         git_push=lambda repo_root, remote_name, branch_name: calls.append(("push", str(repo_root), remote_name, branch_name)),
         create_pull_request=lambda repo_full_name, payload: type(
@@ -138,6 +140,7 @@ def test_service_delivers_single_accepted_issue_and_updates_registry(tmp_path: P
     assert updated.delivery_id == "123"
     assert updated.delivery_ref == "https://github.com/GM-HZ/nightshift/pull/123"
     assert [call[0] for call in calls] == ["add", "commit", "push"]
+    assert "README.md" in calls[0]
 
 
 def test_service_marks_failed_when_push_fails(tmp_path: Path) -> None:
@@ -150,7 +153,8 @@ def test_service_marks_failed_when_push_fails(tmp_path: Path) -> None:
         repo_root=tmp_path,
         config=_config(tmp_path),
         registry=registry,
-        git_add=lambda worktree_path: None,
+        git_add=lambda worktree_path, changed_paths: None,
+        git_changed_paths=lambda worktree_path: ("README.md",),
         git_commit=lambda worktree_path, message: None,
         git_push=fail_push,
         create_pull_request=lambda repo_full_name, payload: pytest.fail("PR should not be attempted"),
@@ -160,6 +164,28 @@ def test_service_marks_failed_when_push_fails(tmp_path: Path) -> None:
 
     assert result.failed_issue_ids == ("GH-7",)
     updated = registry.get_record("GH-7")
-    assert updated.delivery_state == DeliveryState.branch_ready
+    assert updated.delivery_state == DeliveryState.none
     assert updated.delivery_ref is None
     assert updated.delivery_id is None
+
+
+def test_service_refuses_changes_outside_allowed_paths(tmp_path: Path) -> None:
+    registry = _seed_issue(tmp_path)
+    worktree = tmp_path / ".worktrees" / "issue-GH-7"
+    (worktree / "notes.txt").write_text("unexpected\n")
+
+    service = DeliveryService(
+        repo_root=tmp_path,
+        config=_config(tmp_path),
+        registry=registry,
+        git_add=lambda worktree_path, changed_paths: None,
+        git_changed_paths=lambda worktree_path: ("README.md", "notes.txt"),
+        git_commit=lambda worktree_path, message: None,
+        git_push=lambda repo_root, remote_name, branch_name: None,
+        create_pull_request=lambda repo_full_name, payload: pytest.fail("PR should not be attempted"),
+    )
+
+    result = service.deliver(DeliveryRequest(issue_ids=("GH-7",)))
+
+    assert result.failed_issue_ids == ("GH-7",)
+    assert "outside allowed_paths" in (result.results[0].reason or "")
