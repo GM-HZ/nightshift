@@ -8,8 +8,14 @@ from .base import EngineAdapter
 
 
 class EngineRegistry:
-    def __init__(self, adapters: Iterable[EngineAdapter] | None = None) -> None:
+    def __init__(
+        self,
+        adapters: Iterable[EngineAdapter] | None = None,
+        *,
+        default_adapter_name: str | None = None,
+    ) -> None:
         self._adapters: dict[str, EngineAdapter] = {}
+        self._default_adapter_name = default_adapter_name
         if adapters is not None:
             for adapter in adapters:
                 self.register(adapter)
@@ -22,9 +28,16 @@ class EngineRegistry:
             issue_contract.engine_preferences.primary,
             issue_contract.engine_preferences.fallback,
         )
+        has_explicit_preference = any(preference is not None for preference in preferences)
         for preference in preferences:
             if preference is not None and preference in self._adapters:
                 return self._adapters[preference]
+
+        if has_explicit_preference:
+            raise LookupError("no registered adapter satisfies the issue engine preferences")
+
+        if self._default_adapter_name is not None and self._default_adapter_name in self._adapters:
+            return self._adapters[self._default_adapter_name]
 
         if self._adapters:
             default_name = sorted(self._adapters)[0]

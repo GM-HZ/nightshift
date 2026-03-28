@@ -23,6 +23,7 @@ def root() -> None:
 
 
 def build_run_orchestrator(repo_root: Path, config: object) -> RunOrchestrator:
+    adapters = [CodexAdapter(), ClaudeCodeAdapter()]
     return RunOrchestrator(
         issue_registry=IssueRegistry(repo_root),
         state_store=StateStore(repo_root),
@@ -32,7 +33,10 @@ def build_run_orchestrator(repo_root: Path, config: object) -> RunOrchestrator:
             main_branch=config.project.main_branch,
             cleanup_whitelist=tuple(getattr(config.workspace, "cleanup_whitelist", ())),
         ),
-        engine_registry=EngineRegistry((CodexAdapter(), ClaudeCodeAdapter())),
+        engine_registry=EngineRegistry(
+            adapters,
+            default_adapter_name=getattr(config.runner, "default_engine", None),
+        ),
         validation_gate=validation_gate,
     )
 

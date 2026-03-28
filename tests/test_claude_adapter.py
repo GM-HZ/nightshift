@@ -115,6 +115,86 @@ def test_registry_fallback_helper_requires_distinct_available_adapter() -> None:
     assert registry.is_fallback_eligible(_make_issue_contract(primary="claude", fallback="claude"), claude) is False
 
 
+def test_registry_prefers_configured_default_before_alphabetic_fallback() -> None:
+    @dataclass
+    class DummyAdapter:
+        adapter_name: str
+
+        def name(self) -> str:
+            return self.adapter_name
+
+        def capabilities(self) -> EngineCapabilities:
+            return EngineCapabilities()
+
+        def prepare(self, issue_contract: IssueContract, workspace: object, context_bundle: ContextBundle) -> object:
+            del issue_contract, workspace, context_bundle
+            return object()
+
+        def execute(self, prepared_invocation: object) -> EngineOutcome:
+            del prepared_invocation
+            return EngineOutcome(
+                engine_name=self.adapter_name,
+                engine_invocation_id="invocation",
+                outcome_type="success",
+                exit_code=0,
+                recoverable=False,
+                summary="ok",
+            )
+
+        def normalize_output(self, raw_result: object) -> EngineOutcome:
+            del raw_result
+            return self.execute(object())
+
+    registry = EngineRegistry(default_adapter_name="codex")
+    registry.register(DummyAdapter("codex"))
+    registry.register(DummyAdapter("claude"))
+
+    resolved = registry.resolve(_make_issue_contract(primary=None, fallback=None))
+
+    assert resolved.name() == "codex"
+
+
+def test_registry_rejects_explicit_unavailable_preferences_instead_of_silent_default() -> None:
+    @dataclass
+    class DummyAdapter:
+        adapter_name: str
+
+        def name(self) -> str:
+            return self.adapter_name
+
+        def capabilities(self) -> EngineCapabilities:
+            return EngineCapabilities()
+
+        def prepare(self, issue_contract: IssueContract, workspace: object, context_bundle: ContextBundle) -> object:
+            del issue_contract, workspace, context_bundle
+            return object()
+
+        def execute(self, prepared_invocation: object) -> EngineOutcome:
+            del prepared_invocation
+            return EngineOutcome(
+                engine_name=self.adapter_name,
+                engine_invocation_id="invocation",
+                outcome_type="success",
+                exit_code=0,
+                recoverable=False,
+                summary="ok",
+            )
+
+        def normalize_output(self, raw_result: object) -> EngineOutcome:
+            del raw_result
+            return self.execute(object())
+
+    registry = EngineRegistry(default_adapter_name="codex")
+    registry.register(DummyAdapter("codex"))
+    registry.register(DummyAdapter("claude"))
+
+    with pytest.raises(LookupError):
+        registry.resolve(_make_issue_contract(primary="missing", fallback=None))
+
+    with pytest.raises(LookupError):
+        registry.resolve(_make_issue_contract(primary="missing", fallback="also-missing"))
+
+
 def test_claude_prepare_builds_artifact_backed_invocation(tmp_path: Path) -> None:
     issue_contract = _make_issue_contract()
     artifact_dir = tmp_path / "artifacts"
