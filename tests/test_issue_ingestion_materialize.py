@@ -59,6 +59,8 @@ def test_materialize_issue_writes_contract_and_record(tmp_path: Path) -> None:
     assert contract.acceptance == ("Chinese README exists",)
     assert contract.verification.issue_validation is not None
     assert contract.verification.issue_validation.commands == ("python3 -m pytest tests/test_cli_smoke.py -q",)
+    assert contract.verification.regression_validation is not None
+    assert contract.verification.regression_validation.commands == ("python3 -m pytest tests/test_cli_smoke.py -q",)
     assert record.issue_state == IssueState.ready
     assert record.attempt_state == AttemptState.pending
     assert record.delivery_state == DeliveryState.none

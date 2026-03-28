@@ -71,6 +71,29 @@ def test_codex_adapter_declares_expected_capabilities() -> None:
     )
 
 
+def test_codex_prepare_defaults_to_noninteractive_exec_command_and_sanitized_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TERM", "dumb")
+    monkeypatch.setenv("PATH", "/tmp/bin")
+    issue_contract = _make_issue_contract()
+    artifact_dir = tmp_path / "artifacts"
+    context_bundle = ContextBundle(
+        issue_id=issue_contract.issue_id,
+        prompt="Fix the failing issue",
+        artifact_dir=artifact_dir,
+        worktree_path=tmp_path / "worktree",
+    )
+    adapter = CodexAdapter()
+
+    prepared = adapter.prepare(issue_contract, tmp_path / "workspace", context_bundle)
+
+    assert prepared.command == ("codex", "exec", "-")
+    assert prepared.env["PATH"] == "/tmp/bin"
+    assert "TERM" not in prepared.env
+
+
 def test_registry_prefers_primary_then_configured_default_then_deterministic_default() -> None:
     @dataclass
     class DummyAdapter:
@@ -187,6 +210,7 @@ def test_codex_execute_writes_artifacts_and_normalizes_outcome(tmp_path: Path, m
     assert outcome.stderr_path == str(prepared.stderr_path)
     assert run_kwargs["input"] == "Fix the failing issue"
     assert run_kwargs["timeout"] == 60
+    assert run_kwargs["env"] == prepared.env
     assert outcome.artifact_paths == (
         str(prepared.context_path),
         str(prepared.stdout_path),

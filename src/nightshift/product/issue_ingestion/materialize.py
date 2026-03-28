@@ -49,7 +49,12 @@ def _build_contract(draft: AdmittedIssueDraft, config: NightShiftConfig) -> Issu
                 required=True,
                 commands=draft.verification_commands,
                 pass_condition=PassConditionContract(type="all_exit_codes_zero"),
-            )
+            ),
+            regression_validation=VerificationStageContract(
+                required=True,
+                commands=draft.verification_commands,
+                pass_condition=PassConditionContract(type="all_exit_codes_zero"),
+            ),
         ),
         test_edit_policy=TestEditPolicyContract.model_validate(
             config.issue_defaults.default_test_edit_policy.model_dump(mode="json")

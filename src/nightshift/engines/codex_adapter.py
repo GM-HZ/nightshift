@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 import json
+import os
 import subprocess
 from typing import Any, Sequence
 
@@ -26,7 +27,7 @@ class _ExecutionResult:
 
 
 class CodexAdapter(EngineAdapter):
-    def __init__(self, command: Sequence[str] = ("codex",)) -> None:
+    def __init__(self, command: Sequence[str] = ("codex", "exec", "-")) -> None:
         self._command = tuple(command)
 
     def name(self) -> str:
@@ -66,6 +67,7 @@ class CodexAdapter(EngineAdapter):
             context_path=context_path,
             structured_output_path=structured_output_path,
             timeout_seconds=issue_contract.timeouts.command_seconds,
+            env=_noninteractive_env(),
         )
 
     def execute(self, prepared_invocation: PreparedInvocation) -> EngineOutcome:
@@ -79,6 +81,7 @@ class CodexAdapter(EngineAdapter):
                 check=False,
                 input=prepared_invocation.prompt,
                 timeout=prepared_invocation.timeout_seconds,
+                env=prepared_invocation.env,
             )
         except OSError as error:
             return self._finalize(
@@ -231,6 +234,13 @@ def _text_or_empty(value: str | bytes | None) -> str:
 
 def _duration_ms(started_at: datetime, ended_at: datetime) -> int:
     return int((ended_at - started_at).total_seconds() * 1000)
+
+
+def _noninteractive_env() -> dict[str, str]:
+    env = dict(os.environ)
+    if env.get("TERM") == "dumb":
+        env.pop("TERM", None)
+    return env
 
 
 def _workspace_path(workspace: object) -> Path:
