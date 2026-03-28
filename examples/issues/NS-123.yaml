@@ -1,0 +1,35 @@
+issue_id: NS-123
+title: Run orchestrator happy path
+kind: execution
+goal: Validate the single-issue run-one flow
+allowed_paths:
+  - src
+forbidden_paths:
+  - secrets
+verification:
+  issue_validation:
+    required: true
+    commands:
+      - python3 -c "print('issue ok')"
+    pass_condition:
+      type: exit_code
+      expected: 0
+  regression_validation:
+    required: true
+    commands:
+      - python3 -c "print('regression ok')"
+    pass_condition:
+      type: exit_code
+      expected: 0
+test_edit_policy:
+  can_add_tests: true
+  can_modify_existing_tests: true
+  can_weaken_assertions: false
+  requires_test_change_reason: true
+attempt_limits: {}
+timeouts:
+  command_seconds: 60
+  issue_budget_seconds: 120
+priority: high
+engine_preferences:
+  primary: codex
