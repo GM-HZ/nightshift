@@ -46,16 +46,17 @@ class RecoveryOrchestrator:
         if source_run_state.active_attempt_id is None or source_run_state.active_issue_id is None:
             raise ValueError("source run does not have an active issue to recover")
 
+        active_issue_id = source_run_state.active_issue_id
         source_attempt = self.state_store.load_attempt_record(source_run_state.active_attempt_id)
         recovery_run_id = self.id_factory("run")
         recovery_attempt_id = self.id_factory("attempt")
         source_run_ended = self._with_run_state(source_run_state, RunLifecycleState.aborted)
         self.state_store.save_run_state(source_run_ended)
-        self.state_store.append_event(self._event(source_run_id, "run_recovery_started"))
+        self._append_event(source_run_id, "run_recovery_started", issue_id=active_issue_id)
 
         if source_attempt.attempt_state == AttemptState.executing and source_attempt.engine_outcome is None:
             issue_record = self._update_issue_record(
-                self.issue_registry.get_record(source_run_state.active_issue_id),
+                self.issue_registry.get_record(active_issue_id),
                 current_run_id=recovery_run_id,
                 latest_attempt_id=recovery_attempt_id,
                 issue_state=IssueState.ready,
@@ -73,13 +74,18 @@ class RecoveryOrchestrator:
             )
             self.state_store.save_run_state(
                 self._with_run_state(
-                    self._new_run_state(recovery_run_id, source_run_state.active_issue_id, recovery_attempt_id),
+                    self._new_run_state(recovery_run_id, active_issue_id, recovery_attempt_id),
                     RunLifecycleState.aborted,
                 )
             )
-            self.state_store.append_event(self._event(recovery_run_id, "attempt_aborted_on_recovery", attempt_id=recovery_attempt_id))
+            self._append_event(
+                recovery_run_id,
+                "attempt_aborted_on_recovery",
+                issue_id=active_issue_id,
+                attempt_id=recovery_attempt_id,
+            )
             self.state_store.set_active_run(None)
-            self.state_store.append_event(self._event(recovery_run_id, "run_recovery_completed"))
+            self._append_event(recovery_run_id, "run_recovery_completed", issue_id=active_issue_id)
             return RecoveryResult(
                 source_run_id=source_run_id,
                 recovery_run_id=recovery_run_id,
@@ -91,7 +97,7 @@ class RecoveryOrchestrator:
 
         if source_attempt.attempt_state == AttemptState.executing:
             issue_record = self._update_issue_record(
-                self.issue_registry.get_record(source_run_state.active_issue_id),
+                self.issue_registry.get_record(active_issue_id),
                 current_run_id=recovery_run_id,
                 latest_attempt_id=recovery_attempt_id,
                 issue_state=IssueState.running,
@@ -109,13 +115,18 @@ class RecoveryOrchestrator:
             )
             self.state_store.save_run_state(
                 self._with_run_state(
-                    self._new_run_state(recovery_run_id, source_run_state.active_issue_id, recovery_attempt_id),
+                    self._new_run_state(recovery_run_id, active_issue_id, recovery_attempt_id),
                     RunLifecycleState.running,
                 )
             )
             self.state_store.set_active_run(recovery_run_id)
-            self.state_store.append_event(self._event(recovery_run_id, "attempt_recovered", attempt_id=recovery_attempt_id))
-            self.state_store.append_event(self._event(recovery_run_id, "run_recovery_completed"))
+            self._append_event(
+                recovery_run_id,
+                "attempt_recovered",
+                issue_id=active_issue_id,
+                attempt_id=recovery_attempt_id,
+            )
+            self._append_event(recovery_run_id, "run_recovery_completed", issue_id=active_issue_id)
             return RecoveryResult(
                 source_run_id=source_run_id,
                 recovery_run_id=recovery_run_id,
@@ -128,7 +139,7 @@ class RecoveryOrchestrator:
         if source_attempt.attempt_state != AttemptState.validating:
             raise ValueError(f"unsupported recovery state: {source_attempt.attempt_state}")
 
-        issue_contract = self.issue_registry.get_contract(source_run_state.active_issue_id)
+        issue_contract = self.issue_registry.get_contract(active_issue_id)
         workspace = self.workspace_factory(source_attempt)
         recovery_attempt = self._clone_attempt_record(
             source_attempt,
@@ -136,19 +147,34 @@ class RecoveryOrchestrator:
             run_id=recovery_run_id,
             attempt_state=AttemptState.validating,
         )
+        issue_record = self._update_issue_record(
+            self.issue_registry.get_record(active_issue_id),
+            current_run_id=recovery_run_id,
+            latest_attempt_id=recovery_attempt_id,
+            issue_state=IssueState.running,
+            attempt_state=AttemptState.validating,
+        )
+        self.issue_registry.save_record(issue_record)
+        self.state_store.save_run_issue_snapshot(recovery_run_id, issue_record)
+        self.state_store.save_attempt_record(recovery_attempt)
         self.state_store.save_run_state(
             self._with_run_state(
-                self._new_run_state(recovery_run_id, source_run_state.active_issue_id, recovery_attempt_id),
+                self._new_run_state(recovery_run_id, active_issue_id, recovery_attempt_id),
                 RunLifecycleState.running,
             )
         )
         self.state_store.set_active_run(recovery_run_id)
-        self.state_store.append_event(self._event(recovery_run_id, "validation_restarted", attempt_id=recovery_attempt_id))
+        self._append_event(
+            recovery_run_id,
+            "validation_restarted",
+            issue_id=active_issue_id,
+            attempt_id=recovery_attempt_id,
+        )
         validation_result = self.validation_gate.validate(issue_contract, workspace, recovery_attempt)
         accepted = bool(self.validation_gate.evaluate_acceptance(validation_result))
 
         issue_record = self._update_issue_record(
-            self.issue_registry.get_record(source_run_state.active_issue_id),
+            self.issue_registry.get_record(active_issue_id),
             current_run_id=recovery_run_id,
             latest_attempt_id=recovery_attempt_id,
             issue_state=IssueState.done if accepted else IssueState.ready,
@@ -170,7 +196,7 @@ class RecoveryOrchestrator:
             self._with_run_state(
                 self._new_run_state(
                     recovery_run_id,
-                    source_run_state.active_issue_id,
+                    active_issue_id,
                     recovery_attempt_id,
                     issues_completed=1 if accepted else 0,
                 ),
@@ -178,7 +204,7 @@ class RecoveryOrchestrator:
             )
         )
         self.state_store.set_active_run(None)
-        self.state_store.append_event(self._event(recovery_run_id, "run_recovery_completed"))
+        self._append_event(recovery_run_id, "run_recovery_completed", issue_id=active_issue_id)
         return RecoveryResult(
             source_run_id=source_run_id,
             recovery_run_id=recovery_run_id,
@@ -267,15 +293,31 @@ class RecoveryOrchestrator:
         )
         return IssueRecord.model_validate(payload)
 
-    def _event(self, run_id: str, event_type: str, *, attempt_id: str | None = None) -> EventRecord:
-        return EventRecord(
-            seq=0,
-            run_id=run_id,
-            attempt_id=attempt_id,
-            event_type=event_type,
-            payload={},
-            created_at=self.now_factory(),
+    def _append_event(
+        self,
+        run_id: str,
+        event_type: str,
+        *,
+        issue_id: str | None = None,
+        attempt_id: str | None = None,
+    ) -> None:
+        self.state_store.append_event(
+            EventRecord(
+                seq=self._next_event_seq(run_id),
+                run_id=run_id,
+                issue_id=issue_id,
+                attempt_id=attempt_id,
+                event_type=event_type,
+                payload={},
+                created_at=self.now_factory(),
+            )
         )
+
+    def _next_event_seq(self, run_id: str) -> int:
+        events = self.state_store.read_events(run_id)
+        if not events:
+            return 1
+        return max(event.seq for event in events) + 1
 
     def _default_workspace_factory(self, attempt_record: AttemptRecord) -> Any:
         return Path(attempt_record.worktree_path or ".")

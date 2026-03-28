@@ -2,8 +2,8 @@ project:
   repo_path: /workspace/nightshift
   main_branch: main
 runner:
-  default_engine: gpt-5
-  fallback_engine: gpt-4.1
+  default_engine: codex
+  fallback_engine: claude
   issue_timeout_seconds: 900
   overnight_timeout_seconds: 28800
 validation:

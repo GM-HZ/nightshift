@@ -186,6 +186,9 @@ class FakeStateStore:
     def append_event(self, event_record: object) -> None:
         self.events.append(event_record)
 
+    def read_events(self, run_id: str) -> list[object]:
+        return [event for event in self.events if getattr(event, "run_id", None) == run_id]
+
     def set_active_run(self, run_id_or_none: str | None) -> None:
         self.active_runs.append(run_id_or_none)
 
@@ -234,6 +237,11 @@ def test_recovery_marks_source_run_aborted_and_creates_new_run_for_executing_att
     assert state_store.active_runs[-1] is None
     assert validation_gate.calls == []
     assert issue_registry.saved_records[-1].current_run_id == "recovery-run-1"
+    assert [(event.run_id, event.seq, event.issue_id, event.attempt_id, event.event_type) for event in state_store.events] == [
+        ("run-1", 1, "ISSUE-1", None, "run_recovery_started"),
+        ("recovery-run-1", 1, "ISSUE-1", "recovery-attempt-1", "attempt_aborted_on_recovery"),
+        ("recovery-run-1", 2, "ISSUE-1", None, "run_recovery_completed"),
+    ]
 
 
 def test_recovery_reruns_validation_for_validating_attempt() -> None:
@@ -265,8 +273,14 @@ def test_recovery_reruns_validation_for_validating_attempt() -> None:
     assert result.recovered_attempt_state == AttemptState.accepted
     assert validation_gate.calls == [("ISSUE-1", Path("/tmp/worktree"), "recovery-attempt-1")]
     assert any(saved.run_id == "run-1" and saved.run_state == RunLifecycleState.aborted for saved in state_store.saved_run_states)
-    assert state_store.saved_attempt_records[-1].run_id == "recovery-run-1"
-    assert state_store.saved_attempt_records[-1].attempt_state == AttemptState.accepted
+    assert [saved.attempt_state for saved in state_store.saved_attempt_records] == [
+        AttemptState.validating,
+        AttemptState.accepted,
+    ]
+    assert state_store.saved_attempt_records[0].run_id == "recovery-run-1"
+    assert state_store.saved_attempt_records[0].attempt_id == "recovery-attempt-1"
+    assert state_store.saved_snapshots[0][0] == "recovery-run-1"
+    assert state_store.saved_snapshots[0][1].issue_state == IssueState.running
     assert issue_registry.saved_records[-1].issue_state == IssueState.done
     assert state_store.active_runs[-1] is None
 
