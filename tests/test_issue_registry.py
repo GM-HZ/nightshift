@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from typer.testing import CliRunner
 
+from nightshift.cli.app import app
 from nightshift.domain import DeliveryState, IssueKind, IssueState, AttemptState
 from nightshift.domain.contracts import (
     AttemptLimitsContract,
@@ -258,3 +262,56 @@ def test_issue_registry_rejects_path_traversal_issue_ids(tmp_path: Path) -> None
 
     with pytest.raises(ValueError):
         registry.save_record(make_record("../ISSUE-1"))
+
+
+def test_queue_status_lists_current_records(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    registry.save_record(make_record("ISSUE-2", queue_priority="low"))
+    registry.save_record(make_record("ISSUE-1", queue_priority="high"))
+
+    result = CliRunner().invoke(app, ["queue", "status", "--repo", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "queue status" not in result.stdout.lower()
+    assert "ISSUE-1" in result.stdout
+    assert "ISSUE-2" in result.stdout
+    assert result.stdout.index("ISSUE-1") < result.stdout.index("ISSUE-2")
+    assert "queue_priority=high" in result.stdout
+    assert "queue_priority=low" in result.stdout
+
+
+def test_queue_show_displays_contract_and_record_state(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    registry.save_contract(make_contract("ISSUE-1", priority="medium"))
+    registry.save_record(
+        make_record(
+            "ISSUE-1",
+            queue_priority="urgent",
+            issue_state=IssueState.running,
+            attempt_state=AttemptState.executing,
+            delivery_state=DeliveryState.none,
+        )
+    )
+
+    result = CliRunner().invoke(app, ["queue", "show", "ISSUE-1", "--repo", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "issue_id=ISSUE-1" in result.stdout
+    assert "priority=medium" in result.stdout
+    assert "queue_priority=urgent" in result.stdout
+    assert "issue_state=running" in result.stdout
+    assert "attempt_state=executing" in result.stdout
+    assert "delivery_state=none" in result.stdout
+
+
+def test_queue_reprioritize_updates_only_current_issue_record(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    registry.save_contract(make_contract("ISSUE-1", priority="medium"))
+    registry.save_record(make_record("ISSUE-1", queue_priority="medium"))
+
+    result = CliRunner().invoke(app, ["queue", "reprioritize", "ISSUE-1", "urgent", "--repo", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "queue_priority=urgent" in result.stdout
+    assert registry.get_record("ISSUE-1").queue_priority == "urgent"
+    assert registry.get_contract("ISSUE-1").priority == "medium"

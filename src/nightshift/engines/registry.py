@@ -32,3 +32,12 @@ class EngineRegistry:
 
         raise LookupError("no engine adapters have been registered")
 
+    def is_fallback_eligible(self, issue_contract: IssueContract, current_adapter: EngineAdapter) -> bool:
+        fallback_name = issue_contract.engine_preferences.fallback
+        if fallback_name is None:
+            return False
+
+        if fallback_name == current_adapter.name():
+            return False
+
+        return fallback_name in self._adapters
