@@ -2,6 +2,12 @@
 
 This index exists to keep implementation work anchored to one active design target and to prevent older design iterations from polluting the default reading path.
 
+For the shortest current-state architecture view, also see:
+
+- `docs/architecture/README.md`
+- `docs/architecture/kernel/README.md`
+- `docs/architecture/product/README.md`
+
 ## Current Implementation Target
 
 The current implementation target is:
