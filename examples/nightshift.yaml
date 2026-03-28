@@ -1,0 +1,27 @@
+project:
+  name: NightShift
+runner:
+  engine_policy: default
+validation:
+  enabled: true
+issue_defaults:
+  priority: normal
+  forbidden_paths:
+    - .git
+    - secrets
+  test_edit_policy: allow
+  attempt_limits:
+    max_attempts: 3
+    max_retries: 2
+  timeouts:
+    preflight_seconds: 30
+    execution_seconds: 1800
+    validation_seconds: 300
+retry:
+  enabled: true
+workspace:
+  root: .
+alerts:
+  enabled: true
+report:
+  format: text
