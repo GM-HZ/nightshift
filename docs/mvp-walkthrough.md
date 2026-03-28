@@ -37,6 +37,20 @@ Reference shapes live in:
 
 Those example files are templates, not an automatically bootstrapped runnable repo state.
 
+## Remaining Non-MVP Gaps
+
+This branch intentionally stops short of the full `v4.2.1` product surface. The following items remain outside the current MVP:
+
+- no requirement splitter or approval ingestion flow
+- no `queue add` command
+- no multi-issue overnight scheduler, daemon runner, or stop control loop
+- no delivery automation for branch-ready, PR-opened, reviewed, merged, or closed states
+- no operator log browsing command such as `logs --issue`
+- no rich report generator beyond the current minimal JSON historical report
+- retry budgets, circuit breaker behavior, alert delivery channels, and top-level validation command groups are not yet fully wired into orchestration policy
+
+Treat these as the explicit next layer above the current kernel MVP, not as hidden unfinished work inside the implemented slice set.
+
 ## Expected Repository Layout
 
 ```text

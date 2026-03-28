@@ -44,6 +44,18 @@ What is intentionally not in the MVP yet:
 - notifications and dashboards
 - unattended multi-issue overnight scheduling policy beyond the current queue primitives
 
+## Remaining Non-MVP Gaps
+
+The current branch is intentionally not a full `v4.2.1` product-complete implementation. These gaps are known and not bugs in the current MVP scope:
+
+- no issue ingestion flow yet: contracts and current issue records must still be seeded before execution
+- no multi-issue overnight control loop yet: `run-one` exists, but `run`, `run --daemon`, and `stop` are not implemented
+- no queue admission command yet: `queue add` is still absent
+- no delivery automation yet: branch handoff, PR opening, review sync, and merge workflows are not wired
+- no operator log views yet: `logs --issue` is not implemented
+- config sections such as `retry`, `alerts`, and top-level validation command groups are modeled, but only minimally wired in the MVP
+- no rich morning report generator yet beyond the current minimal JSON historical report
+
 ## Local Verification
 
 ```bash
