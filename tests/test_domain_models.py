@@ -137,6 +137,40 @@ def test_issue_record_from_contract_seeds_queue_priority() -> None:
     assert record.queue_priority == contract.priority
 
 
+def test_issue_record_from_contract_rejects_contract_field_overrides() -> None:
+    contract = IssueContract(
+        issue_id="ISSUE-1",
+        title="Implement feature",
+        kind="task",
+        priority="high",
+        goal="Ship the feature",
+        allowed_paths=["src"],
+        forbidden_paths=["secrets"],
+        verification=VerificationContract(),
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
+        test_edit_policy=TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        attempt_limits=AttemptLimitsContract(),
+        timeouts=TimeoutsContract(),
+    )
+
+    with pytest.raises(ValueError, match="issue_id|queue_priority"):
+        IssueRecord.from_contract(
+            contract,
+            issue_id="OVERRIDE",
+            queue_priority="low",
+            issue_state="draft",
+            attempt_state="pending",
+            delivery_state="none",
+            created_at="2026-03-28T00:00:00Z",
+            updated_at="2026-03-28T00:00:00Z",
+        )
+
+
 def test_execution_contract_requires_paths_and_validation() -> None:
     contract = IssueContract(
         issue_id="ISSUE-1",
@@ -225,6 +259,18 @@ def test_execution_contract_rejects_unknown_pass_condition_type() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "pass_condition",
+    (
+        {"type": "exit_code", "expected": "0"},
+        {"type": "all_exit_codes_zero", "expected": 0},
+    ),
+)
+def test_pass_condition_contract_rejects_mismatched_expected_type(pass_condition: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        PassConditionContract.model_validate(pass_condition)
+
+
 def test_execution_contract_rejects_empty_allowed_paths() -> None:
     with pytest.raises(ValidationError):
         IssueContract(
@@ -294,6 +340,40 @@ def test_attempt_record_requires_validation_pass_for_accepted() -> None:
     assert "accepted attempts require a passing validation_result" in str(exc_info.value)
 
 
+def test_attempt_record_uses_canonical_validation_passed_field() -> None:
+    record = AttemptRecord.model_validate(
+        {
+            "attempt_id": "ATT-1",
+            "issue_id": "ISSUE-1",
+            "run_id": "RUN-1",
+            "engine_name": "gpt-5",
+            "engine_invocation_id": "INV-1",
+            "attempt_state": "accepted",
+            "validation_result": {"passed": True},
+        }
+    )
+
+    assert record.validation_result is not None
+    assert record.validation_result.passed is True
+
+
+def test_attempt_record_rejects_success_only_validation_result() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        AttemptRecord.model_validate(
+            {
+                "attempt_id": "ATT-1",
+                "issue_id": "ISSUE-1",
+                "run_id": "RUN-1",
+                "engine_name": "gpt-5",
+                "engine_invocation_id": "INV-1",
+                "attempt_state": "accepted",
+                "validation_result": {"success": True},
+            }
+        )
+
+    assert "validation_result" in str(exc_info.value)
+
+
 def test_attempt_record_requires_preflight_failed_to_be_false() -> None:
     with pytest.raises(ValidationError) as exc_info:
         AttemptRecord.model_validate(
@@ -327,3 +407,55 @@ def test_issue_record_exposes_delivery_fields() -> None:
     assert hasattr(record, "queue_priority")
     assert hasattr(record, "delivery_id")
     assert hasattr(record, "delivery_ref")
+
+
+def test_issue_record_rejects_blocked_without_blocker_type() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "blocked",
+                "attempt_state": "pending",
+                "delivery_state": "none",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "blocker_type" in str(exc_info.value)
+
+
+def test_issue_record_rejects_non_none_delivery_without_accepted_attempt() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "draft",
+                "attempt_state": "pending",
+                "delivery_state": "branch_ready",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "accepted_attempt_id" in str(exc_info.value)
+
+
+def test_issue_record_rejects_pr_opened_without_delivery_reference() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        IssueRecord.model_validate(
+            {
+                "issue_id": "ISSUE-1",
+                "issue_state": "draft",
+                "attempt_state": "pending",
+                "delivery_state": "pr_opened",
+                "accepted_attempt_id": "ATT-1",
+                "queue_priority": "high",
+                "created_at": "2026-03-28T00:00:00Z",
+                "updated_at": "2026-03-28T00:00:00Z",
+            }
+        )
+
+    assert "delivery_id or delivery_ref" in str(exc_info.value)

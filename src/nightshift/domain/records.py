@@ -8,6 +8,17 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .enums import AlertSeverity, AttemptState, DeliveryState, IssueState, RunState as RunStateEnum
 
 
+class AttemptValidationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    passed: bool
+    summary: str | None = None
+    details: str | dict[str, Any] | None = None
+    exit_code: int | None = None
+    command: str | None = None
+    notes: str | None = None
+
+
 class IssueRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -37,6 +48,11 @@ class IssueRecord(BaseModel):
 
         if not isinstance(contract, IssueContract):
             raise TypeError("contract must be an IssueContract")
+
+        overridden_fields = [field for field in ("issue_id", "queue_priority") if field in data]
+        if overridden_fields:
+            fields = ", ".join(overridden_fields)
+            raise ValueError(f"contract-derived fields cannot be overridden: {fields}")
 
         payload = {"issue_id": contract.issue_id, "queue_priority": contract.priority, **data}
         return cls.model_validate(payload)
@@ -77,7 +93,7 @@ class AttemptRecord(BaseModel):
     preflight_passed: bool | None = None
     preflight_summary: str | None = None
     engine_outcome: str | None = None
-    validation_result: dict[str, Any] | None = None
+    validation_result: AttemptValidationResult | None = None
     recoverable: bool | None = None
     retry_recommended: bool | None = None
     summary: str | None = None
@@ -98,12 +114,7 @@ class AttemptRecord(BaseModel):
         return self
 
     def _validation_passed(self) -> bool:
-        if isinstance(self.validation_result, dict):
-            if self.validation_result.get("passed") is True:
-                return True
-            if self.validation_result.get("success") is True:
-                return True
-        return False
+        return self.validation_result is not None and self.validation_result.passed
 
 
 class RunState(BaseModel):
