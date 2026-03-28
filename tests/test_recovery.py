@@ -103,6 +103,9 @@ def make_attempt_record(
         "engine_name": "codex",
         "engine_invocation_id": "INV-1",
         "attempt_state": attempt_state,
+        "preflight_passed": True,
+        "preflight_summary": "workspace prepared",
+        "started_at": "2026-03-28T00:00:00Z",
         "engine_outcome": engine_outcome,
         "validation_result": validation_result.model_dump(mode="json") if validation_result is not None else None,
         "worktree_path": "/tmp/worktree",
@@ -234,6 +237,9 @@ def test_recovery_marks_source_run_aborted_and_creates_new_run_for_executing_att
     assert result.recovered_attempt_state == AttemptState.aborted
     assert any(saved.run_id == "run-1" and saved.run_state == RunLifecycleState.aborted for saved in state_store.saved_run_states)
     assert any(saved.run_id == "recovery-run-1" for saved in state_store.saved_run_states)
+    recovery_run_state = [saved for saved in state_store.saved_run_states if saved.run_id == "recovery-run-1"][-1]
+    assert recovery_run_state.active_issue_id is None
+    assert recovery_run_state.active_attempt_id is None
     assert state_store.active_runs[-1] is None
     assert validation_gate.calls == []
     assert issue_registry.saved_records[-1].current_run_id == "recovery-run-1"
@@ -279,9 +285,17 @@ def test_recovery_reruns_validation_for_validating_attempt() -> None:
     ]
     assert state_store.saved_attempt_records[0].run_id == "recovery-run-1"
     assert state_store.saved_attempt_records[0].attempt_id == "recovery-attempt-1"
+    assert state_store.saved_attempt_records[0].artifact_dir == "/tmp/nightshift/nightshift-data/runs/recovery-run-1/artifacts/attempts/recovery-attempt-1"
     assert state_store.saved_snapshots[0][0] == "recovery-run-1"
     assert state_store.saved_snapshots[0][1].issue_state == IssueState.running
     assert issue_registry.saved_records[-1].issue_state == IssueState.done
+    final_attempt = state_store.saved_attempt_records[-1]
+    assert final_attempt.artifact_dir == "/tmp/nightshift/nightshift-data/runs/recovery-run-1/artifacts/attempts/recovery-attempt-1"
+    assert final_attempt.ended_at == datetime(2026, 3, 28, tzinfo=timezone.utc)
+    assert final_attempt.duration_ms == 0
+    recovery_run_state = [saved for saved in state_store.saved_run_states if saved.run_id == "recovery-run-1"][-1]
+    assert recovery_run_state.active_issue_id is None
+    assert recovery_run_state.active_attempt_id is None
     assert state_store.active_runs[-1] is None
 
 

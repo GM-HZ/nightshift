@@ -16,6 +16,7 @@ NightShift is an overnight AI coding harness. This repository now contains both 
 - `examples/`: reference config and issue contract shapes
 - `docs/superpowers/specs/`: architecture history and current spec set
 - `docs/mvp-walkthrough.md`: implementation-facing usage notes for the current MVP
+- `docs/2026-03-28-workflow-verification-report.md`: real operator rehearsal results and confirmed workflow gaps
 
 ## Current Recommended Entry Points
 
@@ -23,6 +24,7 @@ NightShift is an overnight AI coding harness. This repository now contains both 
 - Current architecture: `docs/superpowers/specs/2026-03-27-nightshift-v4.2.1-unified-spec.md`
 - Current detailed design pack: `docs/superpowers/specs/nightshift-v4.2.1/README.md`
 - MVP walkthrough: `docs/mvp-walkthrough.md`
+- Latest workflow verification: `docs/2026-03-28-workflow-verification-report.md`
 
 ## Current MVP Boundaries
 

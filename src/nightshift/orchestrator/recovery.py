@@ -234,7 +234,20 @@ class RecoveryOrchestrator:
 
     def _with_run_state(self, run_state: RunState, run_state_value: RunLifecycleState) -> RunState:
         payload = run_state.model_dump(mode="json")
-        payload.update({"run_state": run_state_value, "ended_at": self.now_factory() if run_state_value in {RunLifecycleState.aborted, RunLifecycleState.completed} else None})
+        payload.update(
+            {
+                "run_state": run_state_value,
+                "ended_at": self.now_factory() if run_state_value in {RunLifecycleState.aborted, RunLifecycleState.completed} else None,
+            }
+        )
+        if run_state_value in {RunLifecycleState.aborted, RunLifecycleState.completed}:
+            payload.update(
+                {
+                    "active_issue_id": None,
+                    "active_attempt_id": None,
+                    "active_worktrees": [],
+                }
+            )
         return RunState.model_validate(payload)
 
     def _clone_attempt_record(
@@ -247,6 +260,11 @@ class RecoveryOrchestrator:
         validation_result: Any | None = None,
     ) -> AttemptRecord:
         payload = attempt_record.model_dump(mode="json")
+        ended_at = self.now_factory() if attempt_state in {AttemptState.accepted, AttemptState.rejected, AttemptState.aborted} else None
+        started_at = attempt_record.started_at
+        duration_ms: int | None = None
+        if started_at is not None and ended_at is not None:
+            duration_ms = int((ended_at - started_at).total_seconds() * 1000)
         normalized_validation_result: Any | None
         if validation_result is None:
             normalized_validation_result = None
@@ -265,10 +283,16 @@ class RecoveryOrchestrator:
                 "attempt_id": attempt_id,
                 "run_id": run_id,
                 "attempt_state": attempt_state,
+                "artifact_dir": str(self._artifact_dir(run_id, attempt_id)),
                 "validation_result": normalized_validation_result,
+                "ended_at": ended_at,
+                "duration_ms": duration_ms,
             }
         )
         return AttemptRecord.model_validate(payload)
+
+    def _artifact_dir(self, run_id: str, attempt_id: str) -> Path:
+        return Path(self.state_store.root) / "nightshift-data" / "runs" / run_id / "artifacts" / "attempts" / attempt_id
 
     def _update_issue_record(
         self,
