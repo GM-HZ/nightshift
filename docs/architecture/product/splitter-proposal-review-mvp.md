@@ -25,6 +25,15 @@ This MVP covers:
 - emission of approved items into standard NightShift GitHub issues
 - compatibility with the current `issue ingest-github` flow
 
+Current implementation status in this repository:
+
+- implemented: local proposal batch persistence
+- implemented: explicit review state transitions
+- implemented: publish-ready validation
+- implemented: proposal rendering into the standard NightShift GitHub issue template
+- implemented: minimal CLI flow via `split`, `proposals show`, and `proposals publish`
+- not yet implemented: real GitHub issue creation adapter, richer review UX, or high-quality skill-backed decomposition
+
 This MVP does not cover:
 
 - direct emission of final immutable `IssueContract` from the splitter

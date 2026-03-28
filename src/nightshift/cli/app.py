@@ -18,6 +18,8 @@ from nightshift.product.issue_ingestion import (
     parse_github_issue_template,
 )
 from nightshift.product.queue_admission import admit_to_queue
+from nightshift.product.splitter import ProposalStore, publish_proposals, split_requirement_file
+from nightshift.product.splitter.models import PublishedIssueRef
 from nightshift.registry.issue_registry import IssueRegistry
 from nightshift.reporting.minimal_report import build_minimal_report
 from nightshift.store.state_store import StateStore
@@ -27,13 +29,19 @@ from nightshift.workspace.manager import WorkspaceManager
 app = typer.Typer(help="NightShift kernel CLI.")
 queue_app = typer.Typer(help="Inspect and mutate the current issue queue.")
 issue_app = typer.Typer(help="Ingest product-layer issues into the NightShift kernel queue.")
+proposals_app = typer.Typer(help="Inspect and publish splitter proposal batches.")
 app.add_typer(queue_app, name="queue")
 app.add_typer(issue_app, name="issue")
+app.add_typer(proposals_app, name="proposals")
 
 
 @app.callback(invoke_without_command=True)
 def root() -> None:
     pass
+
+
+def create_github_issue(repo_full_name: str, title: str, body: str, labels: tuple[str, ...]) -> PublishedIssueRef:
+    raise NotImplementedError("GitHub issue creation is not wired yet")
 
 
 def build_run_orchestrator(repo_root: Path, config: object) -> RunOrchestrator:
@@ -89,6 +97,62 @@ def _write_report_output(report_model: object, config: object | None) -> None:
     report_path = Path(output_directory) / f"{getattr(report_model, 'run_id')}.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report_model.model_dump(mode="json"), indent=2))
+
+
+def _build_proposal_store(repo_root: Path) -> ProposalStore:
+    return ProposalStore(repo_root)
+
+
+@app.command("split")
+def split(
+    file: Path = typer.Option(..., "--file", exists=True, dir_okay=False, readable=True, resolve_path=True),
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+) -> None:
+    store = _build_proposal_store(repo)
+    batch = split_requirement_file(file)
+    store.save_batch(batch)
+    typer.echo(f"created proposal batch {batch.batch_id} with {len(batch.proposals)} proposal(s)")
+
+
+@proposals_app.command("show")
+def proposals_show(
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+) -> None:
+    store = _build_proposal_store(repo)
+    batches = store.list_batches()
+    if not batches:
+        typer.echo("no proposal batches")
+        return
+    for batch in batches:
+        typer.echo(f"batch_id={batch.batch_id} source={batch.source_requirement_path}")
+        for proposal in batch.proposals:
+            typer.echo(
+                f"proposal_id={proposal.proposal_id} title={proposal.title} review_status={proposal.review_status}"
+            )
+
+
+@proposals_app.command("publish")
+def proposals_publish(
+    proposal_ids: list[str] = typer.Argument(...),
+    batch: str = typer.Option(..., "--batch"),
+    repo_full_name: str = typer.Option(..., "--repo-full-name"),
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+) -> None:
+    store = _build_proposal_store(repo)
+    try:
+        _, refs = publish_proposals(
+            store,
+            batch,
+            proposal_ids,
+            repo_full_name=repo_full_name,
+            publisher=create_github_issue,
+        )
+    except Exception as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(1) from error
+
+    for proposal_id, ref in zip(proposal_ids, refs):
+        typer.echo(f"published proposal {proposal_id} as {ref.repo_full_name}#{ref.issue_number}")
 
 
 @app.command("run-one")
