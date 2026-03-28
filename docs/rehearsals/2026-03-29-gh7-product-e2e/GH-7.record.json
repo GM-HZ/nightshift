@@ -1,0 +1,21 @@
+{
+  "accepted_attempt_id": "ATTEMPT-6494c478",
+  "attempt_state": "accepted",
+  "blocker_type": null,
+  "branch_name": "nightshift-issue-gh-7-readme-rehearsal-retry",
+  "created_at": "2026-03-28T15:33:08.443205Z",
+  "current_run_id": "RUN-66c936e1",
+  "deferred_reason": null,
+  "delivery_id": "8",
+  "delivery_ref": "https://github.com/GM-HZ/nightshift/pull/8",
+  "delivery_state": "pr_opened",
+  "issue_id": "GH-7",
+  "issue_state": "done",
+  "last_summary": "validation passed",
+  "latest_attempt_id": "ATTEMPT-6494c478",
+  "progress_type": null,
+  "queue_priority": "high",
+  "retry_count": 0,
+  "updated_at": "2026-03-28T16:17:54.135004Z",
+  "worktree_path": "/Users/gongmeng/dev/code/nightshift/.worktrees/issue-GH-7"
+}

@@ -1,0 +1,55 @@
+issue_id: GH-7
+title: "\u589E\u52A0\u4E2D\u6587 README \u8BF4\u660E\uFF08rehearsal retry\uFF09"
+kind: execution
+goal: "\u589E\u52A0\u4E2D\u6587 README \u8BF4\u660E"
+allowed_paths:
+- README.md
+- README.zh-CN.md
+forbidden_paths:
+- .git
+- secrets
+verification:
+  issue_validation:
+    required: true
+    commands:
+    - test -s README.zh-CN.md
+    - "rg -n \"README\\.zh-CN\\.md|\u4E2D\u6587\" README.md"
+    pass_condition:
+      type: all_exit_codes_zero
+      expected: null
+  static_validation: null
+  regression_validation:
+    required: true
+    commands:
+    - test -s README.zh-CN.md
+    - "rg -n \"README\\.zh-CN\\.md|\u4E2D\u6587\" README.md"
+    pass_condition:
+      type: all_exit_codes_zero
+      expected: null
+  promotion_validation: null
+test_edit_policy:
+  can_add_tests: true
+  can_modify_existing_tests: true
+  can_weaken_assertions: false
+  requires_test_change_reason: true
+attempt_limits:
+  max_files_changed: 3
+  max_lines_added: 200
+  max_lines_deleted: 50
+timeouts:
+  command_seconds: 900
+  issue_budget_seconds: 7200
+priority: high
+engine_preferences:
+  primary: null
+  fallback: null
+description: "NightShift \u76EE\u524D\u5DF2\u7ECF\u6709\u82F1\u6587 README\uFF0C\u4F46\
+  \u5BF9\u4E2D\u6587\u4F7F\u7528\u8005\u4E0D\u591F\u53CB\u597D\u3002"
+acceptance:
+- "\u4ED3\u5E93\u6839\u76EE\u5F55\u5B58\u5728 README.zh-CN.md"
+- "\u6839 README.md \u9876\u90E8\u6216\u663E\u8457\u4F4D\u7F6E\u6709\u4E2D\u6587\u5165\
+  \u53E3"
+- "\u4E2D\u6587 README \u5185\u5BB9\u4E0E\u5F53\u524D\u5B9E\u73B0\u72B6\u6001\u4E00\
+  \u81F4"
+notes: '- Generated from requirement file.'
+risk: null

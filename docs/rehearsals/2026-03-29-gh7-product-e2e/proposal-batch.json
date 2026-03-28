@@ -1,0 +1,31 @@
+{
+  "batch_id": "BATCH-4f4f4a13",
+  "created_at": "2026-03-28T14:42:24.245011Z",
+  "proposals": [
+    {
+      "acceptance_criteria": [
+        "仓库根目录存在 README.zh-CN.md",
+        "根 README.md 顶部或显著位置有中文入口",
+        "中文 README 内容与当前实现状态一致"
+      ],
+      "allowed_paths": [
+        "README.md",
+        "README.zh-CN.md"
+      ],
+      "missing_context": [],
+      "proposal_id": "PROP-3b9dd537",
+      "review_notes": [
+        "Generated from requirement file."
+      ],
+      "review_status": "published",
+      "suggested_kind": "execution",
+      "summary": "NightShift 目前已经有英文 README，但对中文使用者不够友好。",
+      "title": "增加中文 README 说明",
+      "verification_commands": [
+        "test -s README.zh-CN.md",
+        "rg -n \"README\\.zh-CN\\.md|中文\" README.md"
+      ]
+    }
+  ],
+  "source_requirement_path": "/Users/gongmeng/dev/code/nightshift/requirements/zh-readme-detailed.md"
+}

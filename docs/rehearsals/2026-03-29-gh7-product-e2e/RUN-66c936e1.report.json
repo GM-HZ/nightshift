@@ -1,0 +1,18 @@
+{
+  "run_id": "RUN-66c936e1",
+  "run_state": "completed",
+  "started_at": "2026-03-28T15:37:46.472459Z",
+  "ended_at": "2026-03-28T15:39:08.498833Z",
+  "issues_attempted": 1,
+  "issues_completed": 1,
+  "issues_blocked": 0,
+  "issues_deferred": 0,
+  "issue_snapshot_count": 1,
+  "attempt_count": 1,
+  "recent_event_types": [
+    "run_started",
+    "attempt_started",
+    "attempt_finished",
+    "run_completed"
+  ]
+}

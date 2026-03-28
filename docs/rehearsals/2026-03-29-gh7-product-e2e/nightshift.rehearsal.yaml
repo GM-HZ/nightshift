@@ -1,0 +1,58 @@
+project:
+  repo_path: /Users/gongmeng/dev/code/nightshift
+  main_branch: master
+runner:
+  default_engine: codex
+  fallback_engine: claude
+  issue_timeout_seconds: 900
+  overnight_timeout_seconds: 28800
+validation:
+  enabled: true
+issue_defaults:
+  default_priority: high
+  default_forbidden_paths:
+    - .git
+    - secrets
+  default_test_edit_policy:
+    can_add_tests: true
+    can_modify_existing_tests: true
+    can_weaken_assertions: false
+    requires_test_change_reason: true
+  default_attempt_limits:
+    max_files_changed: 3
+    max_lines_added: 200
+    max_lines_deleted: 50
+  default_timeouts:
+    command_seconds: 900
+    issue_budget_seconds: 7200
+retry:
+  max_retries: 3
+  retry_policy: exponential_backoff
+  failure_circuit_breaker: true
+workspace:
+  worktree_root: /Users/gongmeng/dev/code/nightshift/.worktrees
+  artifact_root: /Users/gongmeng/dev/code/nightshift/nightshift-data/runs
+  cleanup_whitelist:
+    - .git
+alerts:
+  enabled_channels:
+    - console
+  severity_thresholds:
+    info: info
+    warning: warning
+    critical: critical
+report:
+  output_directory: /Users/gongmeng/dev/code/nightshift/nightshift-data/reports
+  summary_verbosity: concise
+product:
+  issue_ingestion:
+    enabled: true
+    allowed_authors:
+      - nightshift-bot
+      - gongmeng
+      - GM-HZ
+    required_label: nightshift
+  delivery:
+    repo_full_name: GM-HZ/nightshift
+    remote_name: origin
+    base_branch: master
