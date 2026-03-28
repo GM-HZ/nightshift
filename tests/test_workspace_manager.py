@@ -59,8 +59,9 @@ def init_repo(tmp_path: Path) -> Path:
     run_git(repo, "init", "-b", "main")
     run_git(repo, "config", "user.name", "NightShift")
     run_git(repo, "config", "user.email", "nightshift@example.com")
+    (repo / ".gitignore").write_text("*.cache\n")
     (repo / "tracked.txt").write_text("original\n")
-    run_git(repo, "add", "tracked.txt")
+    run_git(repo, "add", ".gitignore", "tracked.txt")
     run_git(repo, "commit", "-m", "initial commit")
     return repo
 
@@ -126,3 +127,16 @@ def test_workspace_manager_cleanup_preserves_whitelisted_untracked_files(tmp_pat
 
     assert keep_file.exists()
     assert not drop_file.exists()
+
+
+def test_workspace_manager_cleanup_removes_ignored_files(tmp_path: Path) -> None:
+    repo = init_repo(tmp_path)
+    manager = WorkspaceManager(repo)
+    workspace = manager.prepare_workspace(make_contract("ISSUE-123"))
+
+    ignored_file = workspace.worktree_path / "build.cache"
+    ignored_file.write_text("generated\n")
+
+    manager.cleanup(workspace)
+
+    assert not ignored_file.exists()

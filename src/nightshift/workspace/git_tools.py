@@ -38,7 +38,7 @@ def git_reset_hard(worktree_path: str | Path, commit_sha: str) -> None:
 
 
 def git_clean_untracked(worktree_path: str | Path, whitelist: tuple[str, ...] = ()) -> None:
-    args = ["clean", "-fd"]
+    args = ["clean", "-fdx"]
     for entry in whitelist:
         args.extend(["-e", entry])
     _run_git(worktree_path, *args)
