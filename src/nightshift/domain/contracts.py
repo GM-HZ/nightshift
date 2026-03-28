@@ -1,25 +1,34 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class EnginePreferencesContract(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
-    primary: list[str] = Field(default_factory=list)
-    fallback: list[str] = Field(default_factory=list)
+    primary: str | None = None
+    fallback: str | None = None
+
+
+class PassConditionContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: str
+    expected: Any | None = None
 
 
 class VerificationStageContract(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     required: bool
-    commands: list[str] = Field(default_factory=list)
-    pass_condition: str
+    commands: tuple[str, ...] = Field(default_factory=tuple)
+    pass_condition: PassConditionContract | None = None
 
 
 class VerificationContract(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     issue_validation: VerificationStageContract | None = None
     static_validation: VerificationStageContract | None = None
@@ -28,7 +37,7 @@ class VerificationContract(BaseModel):
 
 
 class TestEditPolicyContract(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     can_add_tests: bool
     can_modify_existing_tests: bool
@@ -40,7 +49,7 @@ TestEditPolicyContract.__test__ = False
 
 
 class AttemptLimitsContract(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     max_files_changed: int | None = None
     max_lines_added: int | None = None
@@ -48,7 +57,7 @@ class AttemptLimitsContract(BaseModel):
 
 
 class TimeoutsContract(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     command_seconds: int | None = None
     issue_budget_seconds: int | None = None
@@ -61,8 +70,8 @@ class IssueContract(BaseModel):
     title: str
     kind: str
     goal: str
-    allowed_paths: list[str]
-    forbidden_paths: list[str]
+    allowed_paths: tuple[str, ...]
+    forbidden_paths: tuple[str, ...]
     verification: VerificationContract
     test_edit_policy: TestEditPolicyContract
     attempt_limits: AttemptLimitsContract
@@ -70,6 +79,26 @@ class IssueContract(BaseModel):
     priority: str
     engine_preferences: EnginePreferencesContract = Field(default_factory=EnginePreferencesContract)
     description: str | None = None
-    acceptance: list[str] = Field(default_factory=list)
+    acceptance: tuple[str, ...] = Field(default_factory=tuple)
     notes: str | None = None
     risk: str | None = None
+
+    @model_validator(mode="after")
+    def validate_execution_requirements(self) -> "IssueContract":
+        if self.kind == "execution":
+            if not self.allowed_paths:
+                raise ValueError("execution contracts require allowed_paths")
+
+            if not self._has_executable_validation():
+                raise ValueError("execution contracts require executable validation")
+
+        return self
+
+    def _has_executable_validation(self) -> bool:
+        stages = (
+            self.verification.issue_validation,
+            self.verification.static_validation,
+            self.verification.regression_validation,
+            self.verification.promotion_validation,
+        )
+        return any(stage is not None and len(stage.commands) > 0 for stage in stages)

@@ -3,7 +3,9 @@ from pydantic import ValidationError
 
 from nightshift.domain.contracts import (
     AttemptLimitsContract,
+    EnginePreferencesContract,
     IssueContract,
+    PassConditionContract,
     TestEditPolicyContract,
     TimeoutsContract,
     VerificationContract,
@@ -25,12 +27,14 @@ def test_issue_contract_rejects_runtime_fields() -> None:
             "issue_validation": {
                 "required": True,
                 "commands": ["pytest"],
-                "pass_condition": "exit_code_zero",
+                "pass_condition": {
+                    "type": "exit_code_zero",
+                },
             }
         },
         "engine_preferences": {
-            "primary": ["gpt-5"],
-            "fallback": ["gpt-4.1"],
+            "primary": "gpt-5",
+            "fallback": "gpt-4.1",
         },
         "test_edit_policy": {
             "can_add_tests": True,
@@ -66,11 +70,11 @@ def test_issue_contract_is_frozen_after_creation() -> None:
         verification=VerificationContract(
             issue_validation=VerificationStageContract(
                 required=True,
-                commands=["pytest"],
-                pass_condition="exit_code_zero",
+                commands=("pytest",),
+                pass_condition=PassConditionContract(type="exit_code_zero"),
             )
         ),
-        engine_preferences={"primary": ["gpt-5"], "fallback": ["gpt-4.1"]},
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
         test_edit_policy=TestEditPolicyContract(
             can_add_tests=True,
             can_modify_existing_tests=True,
@@ -88,8 +92,14 @@ def test_issue_contract_is_frozen_after_creation() -> None:
     with pytest.raises(ValidationError):
         contract.priority = "low"
 
-    assert contract.engine_preferences.primary == ["gpt-5"]
-    assert contract.engine_preferences.fallback == ["gpt-4.1"]
+    with pytest.raises(AttributeError):
+        contract.allowed_paths.append("more")
+
+    with pytest.raises(AttributeError):
+        contract.verification.issue_validation.commands.append("more")
+
+    assert contract.engine_preferences.primary == "gpt-5"
+    assert contract.engine_preferences.fallback == "gpt-4.1"
 
 
 def test_issue_record_from_contract_seeds_queue_priority() -> None:
@@ -102,7 +112,7 @@ def test_issue_record_from_contract_seeds_queue_priority() -> None:
         allowed_paths=["src"],
         forbidden_paths=["secrets"],
         verification=VerificationContract(),
-        engine_preferences={"primary": ["gpt-5"], "fallback": ["gpt-4.1"]},
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
         test_edit_policy=TestEditPolicyContract(
             can_add_tests=True,
             can_modify_existing_tests=True,
@@ -123,6 +133,88 @@ def test_issue_record_from_contract_seeds_queue_priority() -> None:
     )
 
     assert record.queue_priority == contract.priority
+
+
+def test_execution_contract_requires_paths_and_validation() -> None:
+    contract = IssueContract(
+        issue_id="ISSUE-1",
+        title="Run execution work",
+        kind="execution",
+        priority="high",
+        goal="Do the execution task",
+        allowed_paths=["src"],
+        forbidden_paths=["secrets"],
+        verification=VerificationContract(
+            issue_validation=VerificationStageContract(
+                required=True,
+                commands=("pytest",),
+                pass_condition=PassConditionContract(type="exit_code_zero"),
+            )
+        ),
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+        test_edit_policy=TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        attempt_limits=AttemptLimitsContract(),
+        timeouts=TimeoutsContract(),
+    )
+
+    assert contract.kind == "execution"
+
+
+def test_execution_contract_rejects_empty_allowed_paths() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=[],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(
+                issue_validation=VerificationStageContract(
+                    required=True,
+                    commands=("pytest",),
+                    pass_condition=PassConditionContract(type="exit_code_zero"),
+                )
+            ),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
+
+
+def test_execution_contract_rejects_empty_verification() -> None:
+    with pytest.raises(ValidationError):
+        IssueContract(
+            issue_id="ISSUE-1",
+            title="Run execution work",
+            kind="execution",
+            priority="high",
+            goal="Do the execution task",
+            allowed_paths=["src"],
+            forbidden_paths=["secrets"],
+            verification=VerificationContract(),
+            engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
+            test_edit_policy=TestEditPolicyContract(
+                can_add_tests=True,
+                can_modify_existing_tests=True,
+                can_weaken_assertions=False,
+                requires_test_change_reason=True,
+            ),
+            attempt_limits=AttemptLimitsContract(),
+            timeouts=TimeoutsContract(),
+        )
 
 
 def test_issue_record_exposes_delivery_fields() -> None:
