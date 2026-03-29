@@ -15,6 +15,7 @@ from nightshift.product.issue_ingestion_bridge.models import (
 from nightshift.product.issue_ingestion_bridge.service import (
     IssueIngestionBridgeError,
     bridge_github_issue_to_work_order,
+    write_bridge_draft_to_work_order,
 )
 from nightshift.product.work_orders.parser import parse_work_order_markdown
 
@@ -272,3 +273,75 @@ Add a Chinese README.
             config=config,
             author_allowlist=("GM-HZ",),
         )
+
+
+def test_bridge_service_writes_new_work_order_into_repo_layout(tmp_path: Path) -> None:
+    config = load_config(write_config(tmp_path))
+    draft = bridge_github_issue_to_work_order(
+        make_payload(),
+        config=config,
+        author_allowlist=("GM-HZ",),
+    )
+
+    result = write_bridge_draft_to_work_order(
+        repo_root=tmp_path,
+        payload=make_payload(),
+        draft=draft,
+        update_existing=False,
+    )
+
+    work_order_path = tmp_path / ".nightshift" / "work-orders" / "WO-GH-7.md"
+    assert work_order_path.exists()
+    assert result.summary.updated_existing is False
+    assert result.summary.work_order_id == "WO-GH-7"
+    assert result.summary.issue_number == 7
+
+    parsed = parse_work_order_markdown(work_order_path.read_text())
+    assert parsed.frontmatter.work_order_id == "WO-GH-7"
+    assert parsed.frontmatter.execution.issue_id == "GH-7"
+
+
+def test_bridge_service_rejects_overwrite_by_default(tmp_path: Path) -> None:
+    config = load_config(write_config(tmp_path))
+    draft = bridge_github_issue_to_work_order(
+        make_payload(),
+        config=config,
+        author_allowlist=("GM-HZ",),
+    )
+
+    existing_path = tmp_path / ".nightshift" / "work-orders" / "WO-GH-7.md"
+    existing_path.parent.mkdir(parents=True, exist_ok=True)
+    existing_path.write_text("stale contents")
+
+    with pytest.raises(IssueIngestionBridgeError, match="already exists"):
+        write_bridge_draft_to_work_order(
+            repo_root=tmp_path,
+            payload=make_payload(),
+            draft=draft,
+            update_existing=False,
+        )
+
+    assert existing_path.read_text() == "stale contents"
+
+
+def test_bridge_service_allows_explicit_update_existing(tmp_path: Path) -> None:
+    config = load_config(write_config(tmp_path))
+    draft = bridge_github_issue_to_work_order(
+        make_payload(),
+        config=config,
+        author_allowlist=("GM-HZ",),
+    )
+
+    existing_path = tmp_path / ".nightshift" / "work-orders" / "WO-GH-7.md"
+    existing_path.parent.mkdir(parents=True, exist_ok=True)
+    existing_path.write_text("stale contents")
+
+    result = write_bridge_draft_to_work_order(
+        repo_root=tmp_path,
+        payload=make_payload(),
+        draft=draft,
+        update_existing=True,
+    )
+
+    assert result.summary.updated_existing is True
+    assert parse_work_order_markdown(existing_path.read_text()).frontmatter.work_order_id == "WO-GH-7"

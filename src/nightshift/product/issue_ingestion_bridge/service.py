@@ -3,12 +3,15 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 import re
+from pathlib import Path
 
 import yaml
 
 from nightshift.config.models import NightShiftConfig
 from nightshift.product.issue_ingestion_bridge.models import (
     GitHubIssueBridgeDraft,
+    GitHubIssueBridgeResult,
+    GitHubIssueBridgeSummary,
     GitHubIssuePayload,
 )
 from nightshift.product.work_orders.models import (
@@ -78,6 +81,32 @@ def bridge_github_issue_to_work_order(
         issue_id=issue_id,
         work_order_path=work_order_path,
         markdown=_render_work_order_markdown(frontmatter, background=sections.background),
+    )
+
+
+def write_bridge_draft_to_work_order(
+    *,
+    repo_root: Path,
+    payload: GitHubIssuePayload,
+    draft: GitHubIssueBridgeDraft,
+    update_existing: bool,
+) -> GitHubIssueBridgeResult:
+    work_order_path = repo_root / draft.work_order_path
+    existed_before = work_order_path.exists()
+    if existed_before and not update_existing:
+        raise IssueIngestionBridgeError(f"work order already exists at {draft.work_order_path}")
+
+    work_order_path.parent.mkdir(parents=True, exist_ok=True)
+    work_order_path.write_text(draft.markdown)
+
+    return GitHubIssueBridgeResult(
+        payload=payload,
+        summary=GitHubIssueBridgeSummary(
+            repo_full_name=payload.repo_full_name,
+            issue_number=payload.issue_number,
+            work_order_id=draft.work_order_id,
+            updated_existing=existed_before,
+        ),
     )
 
 
