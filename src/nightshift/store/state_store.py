@@ -5,6 +5,7 @@ from pathlib import Path
 from nightshift.domain import AlertEvent, AttemptRecord, EventRecord, RunState
 from nightshift.domain.enums import AlertSeverity
 from nightshift.domain.records import IssueRecord
+from nightshift.product.overnight.loop_metadata import DaemonLoopMetadata
 from nightshift.config.loader import resolve_runtime_storage
 from nightshift.store.filesystem import (
     append_ndjson,
@@ -50,6 +51,24 @@ class StateStore:
             return None
 
         payload = read_json(self._active_run_path())
+        if payload is None:
+            return None
+        return payload.get("run_id")
+
+    def save_daemon_loop_metadata(self, metadata: DaemonLoopMetadata) -> None:
+        write_model_json(self._daemon_loop_metadata_path(metadata.run_id), metadata)
+
+    def load_daemon_loop_metadata(self, run_id: str) -> DaemonLoopMetadata:
+        return read_model_json(self._daemon_loop_metadata_path(run_id), DaemonLoopMetadata)
+
+    def set_active_daemon_run(self, run_id_or_none: str | None) -> None:
+        write_json(self._active_daemon_run_path(), {"run_id": run_id_or_none})
+
+    def get_active_daemon_run(self) -> str | None:
+        if not self._active_daemon_run_path().exists():
+            return None
+
+        payload = read_json(self._active_daemon_run_path())
         if payload is None:
             return None
         return payload.get("run_id")
@@ -155,3 +174,10 @@ class StateStore:
 
     def _active_run_path(self) -> Path:
         return self.runtime_storage.active_run_path
+
+    def _active_daemon_run_path(self) -> Path:
+        return self.runtime_storage.records_root.parent / "active-daemon-run.json"
+
+    def _daemon_loop_metadata_path(self, run_id: str) -> Path:
+        safe_run_id = safe_path_component(run_id, field_name="run_id")
+        return self._runs_dir() / safe_run_id / "daemon-loop.json"

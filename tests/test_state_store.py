@@ -7,6 +7,7 @@ from nightshift.domain import AlertEvent, AttemptRecord, EventRecord, IssueState
 from nightshift.domain.enums import RunState as RunLifecycleState
 from nightshift.domain.records import IssueRecord, RunState as RunStateRecord
 from nightshift.config.models import RuntimeStorageMode
+from nightshift.product.overnight.loop_metadata import DaemonLoopMetadata
 from nightshift.store.state_store import StateStore
 from nightshift.store.filesystem import write_json
 
@@ -86,6 +87,20 @@ def make_alert(alert_id: str, run_id: str, *, issue_id: str | None = None, sever
     )
 
 
+def make_daemon_loop_metadata(run_id: str) -> DaemonLoopMetadata:
+    return DaemonLoopMetadata.model_validate(
+        {
+            "run_id": run_id,
+            "loop_mode": "daemon",
+            "fail_fast": True,
+            "stop_requested": False,
+            "stopped_reason": None,
+            "created_at": "2026-03-28T00:00:00Z",
+            "updated_at": "2026-03-28T00:00:00Z",
+        }
+    )
+
+
 def _write_layered_runtime_marker(repo_root: Path) -> None:
     migration_marker = repo_root / ".nightshift/config/migration.yaml"
     migration_marker.parent.mkdir(parents=True, exist_ok=True)
@@ -150,6 +165,17 @@ def test_state_store_tracks_active_run(tmp_path: Path) -> None:
     assert (tmp_path / "nightshift-data" / "active-run.json").is_file()
 
 
+def test_state_store_tracks_active_daemon_run(tmp_path: Path) -> None:
+    store = StateStore(tmp_path)
+
+    store.set_active_daemon_run("run-1")
+
+    assert store.get_active_daemon_run() == "run-1"
+    store.set_active_daemon_run(None)
+    assert store.get_active_daemon_run() is None
+    assert (tmp_path / "nightshift-data" / "active-daemon-run.json").is_file()
+
+
 def test_state_store_uses_layered_runtime_paths_when_marker_declares_layered(tmp_path: Path) -> None:
     _write_layered_runtime_marker(tmp_path)
     store = StateStore(tmp_path)
@@ -172,6 +198,41 @@ def test_state_store_uses_layered_runtime_paths_when_marker_declares_layered(tmp
     assert (tmp_path / ".nightshift" / "records" / "active-run.json").is_file()
     assert (tmp_path / ".nightshift" / "records" / "alerts.ndjson").is_file()
     assert (tmp_path / ".nightshift" / "runs" / "run-layered" / "events.ndjson").is_file()
+
+
+def test_state_store_tracks_active_daemon_run_in_layered_runtime_layout(tmp_path: Path) -> None:
+    _write_layered_runtime_marker(tmp_path)
+    store = StateStore(tmp_path)
+
+    store.set_active_daemon_run("run-layered")
+
+    assert store.get_active_daemon_run() == "run-layered"
+    assert (tmp_path / ".nightshift" / "records" / "active-daemon-run.json").is_file()
+
+
+def test_state_store_saves_and_loads_daemon_loop_metadata(tmp_path: Path) -> None:
+    store = StateStore(tmp_path)
+    metadata = make_daemon_loop_metadata("run-1")
+
+    store.save_daemon_loop_metadata(metadata)
+
+    loaded = store.load_daemon_loop_metadata("run-1")
+
+    assert loaded == metadata
+    assert (tmp_path / "nightshift-data" / "runs" / "run-1" / "daemon-loop.json").is_file()
+
+
+def test_state_store_uses_layered_runtime_paths_for_daemon_loop_metadata(tmp_path: Path) -> None:
+    _write_layered_runtime_marker(tmp_path)
+    store = StateStore(tmp_path)
+    metadata = make_daemon_loop_metadata("run-layered")
+
+    store.save_daemon_loop_metadata(metadata)
+
+    loaded = store.load_daemon_loop_metadata("run-layered")
+
+    assert loaded == metadata
+    assert (tmp_path / ".nightshift" / "runs" / "run-layered" / "daemon-loop.json").is_file()
 
 
 def test_state_store_saves_and_lists_run_issue_snapshots(tmp_path: Path) -> None:
