@@ -3,18 +3,18 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from nightshift.config.loader import load_config
+from nightshift.config.loader import load_config, load_project_config, resolve_project_config_source
+from nightshift.config.models import LayoutMode
 
 
-def test_load_config_reads_issue_defaults(tmp_path: Path) -> None:
-    config_path = tmp_path / "nightshift.yaml"
-    config_path.write_text(
-        """
+def _write_complete_config(path: Path, *, repo_path: str, default_engine: str) -> None:
+    path.write_text(
+        f"""
 project:
-  repo_path: /workspace/nightshift
+  repo_path: {repo_path}
   main_branch: main
 runner:
-  default_engine: gpt-5
+  default_engine: {default_engine}
   fallback_engine: gpt-4.1
   issue_timeout_seconds: 900
   overnight_timeout_seconds: 28800
@@ -46,8 +46,8 @@ retry:
   retry_policy: exponential_backoff
   failure_circuit_breaker: true
 workspace:
-  worktree_root: /workspace/nightshift/.worktrees
-  artifact_root: /workspace/nightshift/.artifacts
+  worktree_root: {repo_path}/.worktrees
+  artifact_root: {repo_path}/.artifacts
   cleanup_whitelist:
     - .git
 alerts:
@@ -58,10 +58,15 @@ alerts:
     warning: warning
     critical: critical
 report:
-  output_directory: /workspace/nightshift/.reports
+  output_directory: {repo_path}/.reports
   summary_verbosity: concise
 """
     )
+
+
+def test_load_config_reads_issue_defaults(tmp_path: Path) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    _write_complete_config(config_path, repo_path="/workspace/nightshift", default_engine="gpt-5")
 
     config = load_config(config_path)
 
@@ -132,6 +137,115 @@ report:
 
     with pytest.raises(ValidationError):
         load_config(config_path)
+
+
+def test_resolve_project_config_source_defaults_to_compatibility_without_marker(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    resolved = resolve_project_config_source(repo_root)
+
+    assert resolved.mode is LayoutMode.COMPATIBILITY
+    assert resolved.path == repo_root / "nightshift.yaml"
+    assert resolved.migration_marker_path == repo_root / ".nightshift/config/migration.yaml"
+
+
+def test_load_project_config_uses_root_config_when_marker_is_absent(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    root_config = repo_root / "nightshift.yaml"
+    layered_config = repo_root / ".nightshift/config/project.yaml"
+
+    root_config.parent.mkdir(parents=True, exist_ok=True)
+    layered_config.parent.mkdir(parents=True, exist_ok=True)
+    _write_complete_config(root_config, repo_path="/workspace/root", default_engine="gpt-root")
+    _write_complete_config(layered_config, repo_path="/workspace/layered", default_engine="gpt-layered")
+
+    config = load_project_config(repo_root)
+
+    assert config.project.repo_path == "/workspace/root"
+    assert config.runner.default_engine == "gpt-root"
+
+
+def test_load_project_config_uses_layered_project_yaml_when_marker_declares_layered(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path
+    root_config = repo_root / "nightshift.yaml"
+    layered_config = repo_root / ".nightshift/config/project.yaml"
+    migration_marker = repo_root / ".nightshift/config/migration.yaml"
+
+    root_config.parent.mkdir(parents=True, exist_ok=True)
+    layered_config.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    _write_complete_config(root_config, repo_path="/workspace/root", default_engine="gpt-root")
+    _write_complete_config(layered_config, repo_path="/workspace/layered", default_engine="gpt-layered")
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: compatibility
+"""
+    )
+
+    config = load_project_config(repo_root)
+
+    assert config.project.repo_path == "/workspace/layered"
+    assert config.runner.default_engine == "gpt-layered"
+
+
+def test_load_project_config_fails_when_layered_project_yaml_is_missing(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    migration_marker = repo_root / ".nightshift/config/migration.yaml"
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: compatibility
+"""
+    )
+
+    with pytest.raises(FileNotFoundError, match="project.yaml"):
+        load_project_config(repo_root)
+
+
+def test_load_config_reads_explicit_layered_project_file_directly(tmp_path: Path) -> None:
+    project_config = tmp_path / ".nightshift/config/project.yaml"
+    project_config.parent.mkdir(parents=True, exist_ok=True)
+    _write_complete_config(project_config, repo_path="/workspace/layered", default_engine="gpt-layered")
+
+    config = load_config(project_config)
+
+    assert config.project.repo_path == "/workspace/layered"
+    assert config.runner.default_engine == "gpt-layered"
+
+
+def test_resolve_project_config_source_rejects_unsupported_layout_version(tmp_path: Path) -> None:
+    migration_marker = tmp_path / ".nightshift/config/migration.yaml"
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 2
+project_config_source: layered
+runtime_layout_source: compatibility
+"""
+    )
+
+    with pytest.raises(ValueError, match="unsupported migration layout_version"):
+        resolve_project_config_source(tmp_path)
+
+
+def test_resolve_project_config_source_rejects_runtime_layered_before_runtime_migration(tmp_path: Path) -> None:
+    migration_marker = tmp_path / ".nightshift/config/migration.yaml"
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: layered
+"""
+    )
+
+    with pytest.raises(ValueError, match="runtime_layout_source=layered"):
+        resolve_project_config_source(tmp_path)
 
 
 def test_load_config_requires_complete_default_attempt_limits(tmp_path: Path) -> None:

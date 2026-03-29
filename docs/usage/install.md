@@ -44,3 +44,10 @@ For a quick product smoke check, the queue and run commands are the most useful 
 nightshift queue status --repo /path/to/repo
 nightshift run --issues NS-123 --config /path/to/repo/nightshift.yaml
 ```
+
+If the repository has already migrated to Phase 1 layered project config, commands that take `--repo` can resolve config from the repository root and omit `--config`, for example:
+
+```bash
+nightshift run-one ISSUE-1 --repo /path/to/repo
+nightshift queue add NS-123 --repo /path/to/repo
+```

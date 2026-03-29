@@ -166,6 +166,66 @@ def test_queue_add_reports_frozen_contract_and_admission(tmp_path: Path) -> None
     assert record.issue_state == IssueState.ready
 
 
+def test_queue_add_loads_project_config_from_repo_root_when_config_flag_is_omitted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo_root = tmp_path
+    root_config = write_config(repo_root)
+    layered_config = repo_root / ".nightshift/config/project.yaml"
+    migration_marker = repo_root / ".nightshift/config/migration.yaml"
+
+    layered_config.parent.mkdir(parents=True, exist_ok=True)
+    layered_config.write_text(
+        root_config.read_text().replace("default_engine: codex", "default_engine: codex-layered", 1)
+    )
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: compatibility
+"""
+    )
+
+    observed: dict[str, object] = {}
+
+    class FakeStatus:
+        def __init__(self) -> None:
+            self.status = "already_admitted"
+            self.queue_priority = "high"
+
+    class FakeResult:
+        def __init__(self) -> None:
+            self.statuses = [FakeStatus()]
+
+    def fake_admit_to_queue(issue_registry, issue_ids, *, config, priority=None):
+        observed["repo"] = issue_registry.root
+        observed["issue_ids"] = issue_ids
+        observed["default_engine"] = config.runner.default_engine
+        observed["priority"] = priority
+        return FakeResult()
+
+    monkeypatch.setattr("nightshift.cli.app.admit_to_queue", fake_admit_to_queue)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "queue",
+            "add",
+            "WO-20260329-001",
+            "--repo",
+            str(repo_root),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert observed["repo"] == repo_root
+    assert observed["issue_ids"] == ["WO-20260329-001"]
+    assert observed["default_engine"] == "codex-layered"
+    assert observed["priority"] is None
+    assert "frozen contract refreshed" in result.stdout.lower()
+
+
 def test_queue_add_surfaces_materialization_errors_without_traceback(tmp_path: Path) -> None:
     repo_root = tmp_path
     config_path = write_config(repo_root)

@@ -4,6 +4,8 @@ import json
 import typer
 
 from nightshift.config.loader import load_config
+from nightshift.config.loader import load_project_config
+from nightshift.config.models import NightShiftConfig
 from nightshift.engines.codex_adapter import CodexAdapter
 from nightshift.engines.claude_code_adapter import ClaudeCodeAdapter
 from nightshift.engines.registry import EngineRegistry
@@ -48,6 +50,26 @@ def build_run_orchestrator(repo_root: Path, config: object) -> RunOrchestrator:
 
 def build_issue_registry(repo_root: Path) -> IssueRegistry:
     return IssueRegistry(repo_root)
+
+
+def _load_cli_config(
+    repo: Path | None,
+    config: Path | None,
+    *,
+    require_repo_config: bool = False,
+) -> NightShiftConfig | None:
+    if config is not None:
+        return load_config(config)
+    if repo is not None:
+        if (
+            (repo / "nightshift.yaml").exists()
+            or (repo / ".nightshift/config/migration.yaml").exists()
+        ):
+            return load_project_config(repo)
+        if require_repo_config:
+            raise typer.BadParameter("either --config or a repository config is required")
+        return None
+    return None
 
 
 def build_recovery_orchestrator(repo_root: Path) -> RecoveryOrchestrator:
@@ -107,9 +129,9 @@ def _format_queue_add_error(error: Exception) -> str:
 def run_one(
     issue_id: str,
     repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
-    config: Path = typer.Option(..., "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+    config: Path | None = typer.Option(None, "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
 ) -> None:
-    loaded_config = load_config(config)
+    loaded_config = _load_cli_config(repo, config, require_repo_config=True)
     repo_root = _resolve_repo_root(repo, loaded_config)
     orchestrator = build_run_orchestrator(repo_root, loaded_config)
     try:
@@ -140,7 +162,7 @@ def report(
     config: Path | None = typer.Option(None, "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
     run: str | None = typer.Option(None, "--run"),
 ) -> None:
-    loaded_config = load_config(config) if config is not None else None
+    loaded_config = _load_cli_config(repo, config)
     repo_root = _resolve_repo_root(repo, loaded_config)
     state_store = StateStore(repo_root)
     report_model = build_minimal_report(state_store, run)
@@ -193,9 +215,9 @@ def queue_show(
 def queue_add(
     issue_id: str,
     repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
-    config: Path = typer.Option(..., "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+    config: Path | None = typer.Option(None, "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
 ) -> None:
-    loaded_config = load_config(config)
+    loaded_config = _load_cli_config(repo, config, require_repo_config=True)
     issue_registry = build_issue_registry(repo)
 
     try:

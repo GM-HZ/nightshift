@@ -1,15 +1,15 @@
 # Configuration
 
-NightShift currently has two config stories:
+NightShift currently supports two project config modes:
 
-- the implemented MVP compatibility layout
-- the target layered model described in the architecture docs
+- MVP compatibility mode, which keeps `nightshift.yaml` at the repository root
+- Phase 1 layered project config, which uses `.nightshift/config/project.yaml` and a migration marker
 
-## Current MVP Compatibility
+## Compatibility Mode
 
-Today, the repository still centers on a root `nightshift.yaml` and the existing repo-local data layout.
+If `.nightshift/config/migration.yaml` is absent, NightShift treats the repository as compatibility mode.
 
-Typical current paths are:
+Typical compatibility paths are:
 
 - `nightshift.yaml`
 - `nightshift/issues/`
@@ -17,7 +17,7 @@ Typical current paths are:
 - `nightshift-data/runs/`
 - `nightshift-data/active-run.json`
 
-The current config file controls:
+The compatibility config controls:
 
 - repository location and default branch
 - default engine choice
@@ -28,6 +28,34 @@ The current config file controls:
 - report output location
 
 A minimal example lives in [../../examples/nightshift.yaml](../../examples/nightshift.yaml).
+
+## Phase 1 Layered Project Config
+
+The Phase 1 layered layout keeps the project config under `.nightshift/config/` and uses a migration marker to make the active mode explicit.
+
+The first layered files are:
+
+- `.nightshift/config/migration.yaml`
+- `.nightshift/config/project.yaml`
+
+Example migration marker:
+
+```yaml
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: compatibility
+```
+
+When the marker declares `project_config_source: layered`:
+
+- NightShift loads project config from `.nightshift/config/project.yaml`
+- root `nightshift.yaml` is no longer authoritative for that repository
+- product-facing CLI paths that accept `--repo` can resolve config from the repository root when `--config` is omitted
+- runtime state still remains on the compatibility layout during Phase 1
+
+If the marker instead declares `project_config_source: compatibility`, NightShift continues to load the root `nightshift.yaml`.
+
+## Queue Add Freeze Point
 
 In the current implementation, `queue add` is also the freeze point for Work Orders:
 
@@ -41,32 +69,14 @@ If the Work Order changes later, a new `queue add` is required so NightShift can
 
 ## Target Direction
 
-The long-term model is split into:
+The broader long-term model is still split into:
 
 - user space: `~/.nightshift/`
 - project space: `<repo>/.nightshift/`
 
-That target model is still a design direction in the docs. Do not treat it as the current on-disk layout unless the specific repository has already migrated.
-
-## What Is Versioned
-
-In the target model, versioned project material should include:
-
-- project config
-- work orders
-- immutable contracts
-- archived execution records
-
-## What Is Runtime-Only
-
-In the target model, runtime-only material should include:
-
-- run history
-- attempt artifacts
-- transient reports
-- local logs and caches
+That broader target model is still a design direction in the docs. Do not treat it as the current on-disk layout unless the specific repository has already migrated.
 
 ## Practical Rule
 
-If you are setting up the current MVP today, use `nightshift.yaml` plus the existing repo-local directories.
-If you are designing the next layout, use the layered `~/.nightshift/` and `.nightshift/` model as the reference boundary.
+Use `nightshift.yaml` for compatibility repositories.
+Use the migration marker plus `.nightshift/config/project.yaml` for repositories that have entered Phase 1 layered project config.

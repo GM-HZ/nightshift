@@ -474,6 +474,56 @@ def test_run_one_cli_uses_builder_and_prints_result(tmp_path: Path, monkeypatch)
     assert "accepted" in result.stdout
 
 
+def test_run_one_cli_loads_project_config_from_repo_root_when_config_flag_is_omitted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    root_config = repo_path / "nightshift.yaml"
+    layered_config = repo_path / ".nightshift/config/project.yaml"
+    migration_marker = repo_path / ".nightshift/config/migration.yaml"
+
+    root_config.write_text(
+        "project:\n  repo_path: .\n  main_branch: main\nrunner:\n  default_engine: codex-root\n  issue_timeout_seconds: 1\n  overnight_timeout_seconds: 1\nvalidation:\n  enabled: true\nissue_defaults:\n  default_priority: high\n  default_forbidden_paths: [secrets]\n  default_test_edit_policy:\n    can_add_tests: true\n    can_modify_existing_tests: true\n    can_weaken_assertions: false\n    requires_test_change_reason: true\n  default_attempt_limits:\n    max_files_changed: 1\n    max_lines_added: 1\n    max_lines_deleted: 1\n  default_timeouts:\n    command_seconds: 1\n    issue_budget_seconds: 1\nretry:\n  max_retries: 1\n  retry_policy: never\n  failure_circuit_breaker: false\nworkspace:\n  worktree_root: .nightshift/worktrees\n  artifact_root: nightshift-data/runs\nalerts:\n  enabled_channels: []\n  severity_thresholds:\n    info: info\n    warning: warning\n    critical: critical\nreport:\n  output_directory: nightshift-data/reports\n  summary_verbosity: concise\n"
+    )
+    layered_config.parent.mkdir(parents=True, exist_ok=True)
+    layered_config.write_text(
+        "project:\n  repo_path: .\n  main_branch: main\nrunner:\n  default_engine: codex-layered\n  issue_timeout_seconds: 1\n  overnight_timeout_seconds: 1\nvalidation:\n  enabled: true\nissue_defaults:\n  default_priority: high\n  default_forbidden_paths: [secrets]\n  default_test_edit_policy:\n    can_add_tests: true\n    can_modify_existing_tests: true\n    can_weaken_assertions: false\n    requires_test_change_reason: true\n  default_attempt_limits:\n    max_files_changed: 1\n    max_lines_added: 1\n    max_lines_deleted: 1\n  default_timeouts:\n    command_seconds: 1\n    issue_budget_seconds: 1\nretry:\n  max_retries: 1\n  retry_policy: never\n  failure_circuit_breaker: false\nworkspace:\n  worktree_root: .nightshift/worktrees\n  artifact_root: nightshift-data/runs\nalerts:\n  enabled_channels: []\n  severity_thresholds:\n    info: info\n    warning: warning\n    critical: critical\nreport:\n  output_directory: nightshift-data/reports\n  summary_verbosity: concise\n"
+    )
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: compatibility
+"""
+    )
+
+    observed: dict[str, object] = {}
+
+    class FakeCLIOrchestrator:
+        def run_one(self, issue_id: str) -> RunOneResult:
+            assert issue_id == "ISSUE-1"
+            return RunOneResult(issue_id="ISSUE-1", run_id="RUN-CLI", attempt_id="ATTEMPT-CLI", accepted=True)
+
+    def fake_builder(repo: Path, config: object) -> FakeCLIOrchestrator:
+        observed["repo"] = repo
+        observed["default_engine"] = getattr(getattr(config, "runner"), "default_engine")
+        return FakeCLIOrchestrator()
+
+    monkeypatch.setattr("nightshift.cli.app.build_run_orchestrator", fake_builder)
+
+    result = CliRunner().invoke(
+        app,
+        ["run-one", "ISSUE-1", "--repo", str(repo_path)],
+    )
+
+    assert result.exit_code == 0
+    assert observed["repo"] == repo_path
+    assert observed["default_engine"] == "codex-layered"
+
+
 def test_run_one_cli_uses_repo_path_from_config_when_repo_flag_omitted(tmp_path: Path, monkeypatch) -> None:
     config_path = tmp_path / "nightshift.yaml"
     repo_path = tmp_path / "repo"

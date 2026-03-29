@@ -165,3 +165,82 @@ def test_report_command_can_use_repo_from_config_and_persist_output_file(tmp_pat
     report_path = reports_dir / "run-1.json"
     assert report_path.is_file()
     assert json.loads(report_path.read_text())["run_id"] == "run-1"
+
+
+def test_report_command_loads_project_config_from_repo_root_when_config_flag_is_omitted(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path / "repo"
+    reports_dir = tmp_path / "reports"
+    layered_config = repo_root / ".nightshift/config/project.yaml"
+    migration_marker = repo_root / ".nightshift/config/migration.yaml"
+
+    repo_root.mkdir()
+    layered_config.parent.mkdir(parents=True, exist_ok=True)
+    layered_config.write_text(
+        f"""project:
+  repo_path: {repo_root}
+  main_branch: main
+runner:
+  default_engine: codex
+  issue_timeout_seconds: 1
+  overnight_timeout_seconds: 1
+validation:
+  enabled: true
+issue_defaults:
+  default_priority: high
+  default_forbidden_paths: [secrets]
+  default_test_edit_policy:
+    can_add_tests: true
+    can_modify_existing_tests: true
+    can_weaken_assertions: false
+    requires_test_change_reason: true
+  default_attempt_limits:
+    max_files_changed: 1
+    max_lines_added: 1
+    max_lines_deleted: 1
+  default_timeouts:
+    command_seconds: 1
+    issue_budget_seconds: 1
+retry:
+  max_retries: 1
+  retry_policy: never
+  failure_circuit_breaker: false
+workspace:
+  worktree_root: .nightshift/worktrees
+  artifact_root: nightshift-data/runs
+alerts:
+  enabled_channels: []
+  severity_thresholds:
+    info: info
+    warning: warning
+    critical: critical
+report:
+  output_directory: {reports_dir}
+  summary_verbosity: concise
+"""
+    )
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: compatibility
+"""
+    )
+
+    store = StateStore(repo_root)
+    store.save_run_state(make_run_state("run-1"))
+    store.set_active_run("run-1")
+    store.save_run_issue_snapshot("run-1", make_issue_record("ISSUE-1", issue_state=IssueState.done))
+    store.save_attempt_record(make_attempt_record("ATT-1", "ISSUE-1", "run-1", state=AttemptState.accepted))
+    store.append_event(make_event(1, "run-1", "run_started"))
+
+    result = CliRunner().invoke(app, ["report", "--repo", str(repo_root)])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["run_id"] == "run-1"
+    report_path = reports_dir / "run-1.json"
+    assert report_path.is_file()
+    assert json.loads(report_path.read_text())["run_id"] == "run-1"

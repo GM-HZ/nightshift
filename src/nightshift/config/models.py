@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Annotated
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, StringConstraints
 
@@ -105,6 +108,26 @@ class ReportConfig(BaseModel):
 
     output_directory: NonEmptyStr
     summary_verbosity: NonEmptyStr
+
+
+class LayoutMode(str, Enum):
+    COMPATIBILITY = "compatibility"
+    LAYERED_PROJECT_CONFIG = "layered_project_config"
+
+
+class MigrationMarkerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    layout_version: PositiveInt = 1
+    project_config_source: Literal["compatibility", "layered"]
+    runtime_layout_source: Literal["compatibility", "layered"] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedConfigSource:
+    mode: LayoutMode
+    path: Path
+    migration_marker_path: Path | None = None
 
 
 class NightShiftConfig(BaseModel):
