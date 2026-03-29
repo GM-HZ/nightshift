@@ -1,5 +1,7 @@
 # NightShift
 
+> Language / 语言：English | [简体中文](README.zh-CN.md)
+
 NightShift is an overnight AI coding system for turning a requirement into a reviewable change, running it through an engine, and keeping a durable record of what happened. This repository is organized around the `v4.2.1` product direction.
 
 ## Current Status
