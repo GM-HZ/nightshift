@@ -3,9 +3,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from nightshift.config.loader import load_config, load_project_config, resolve_project_config_source
-from nightshift.config.loader import resolve_contract_storage
-from nightshift.config.models import ContractStorageMode, LayoutMode
+from nightshift.config.loader import (
+    load_config,
+    load_project_config,
+    resolve_contract_storage,
+    resolve_project_config_source,
+    resolve_runtime_storage,
+)
+from nightshift.config.models import ContractStorageMode, LayoutMode, RuntimeStorageMode
 
 
 def _write_complete_config(path: Path, *, repo_path: str, default_engine: str) -> None:
@@ -146,6 +151,20 @@ def test_resolve_project_config_source_defaults_to_compatibility_without_marker(
 
     assert resolved.mode is LayoutMode.COMPATIBILITY
     assert resolved.path == repo_root / "nightshift.yaml"
+    assert resolved.migration_marker_path == repo_root / ".nightshift/config/migration.yaml"
+
+
+def test_resolve_runtime_storage_defaults_to_compatibility_without_marker(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    resolved = resolve_runtime_storage(repo_root)
+
+    assert resolved.mode is RuntimeStorageMode.COMPATIBILITY
+    assert resolved.records_root == repo_root / "nightshift-data" / "issue-records"
+    assert resolved.active_run_path == repo_root / "nightshift-data" / "active-run.json"
+    assert resolved.runs_root == repo_root / "nightshift-data" / "runs"
+    assert resolved.alerts_path == repo_root / "nightshift-data" / "alerts.ndjson"
+    assert resolved.artifacts_root == repo_root / "nightshift-data" / "runs"
+    assert resolved.reports_root == repo_root / "nightshift-data" / "reports"
     assert resolved.migration_marker_path == repo_root / ".nightshift/config/migration.yaml"
 
 
@@ -297,7 +316,7 @@ runtime_layout_source: compatibility
         resolve_project_config_source(tmp_path)
 
 
-def test_resolve_project_config_source_rejects_runtime_layered_before_runtime_migration(tmp_path: Path) -> None:
+def test_resolve_runtime_storage_uses_layered_paths_when_marker_declares_layered(tmp_path: Path) -> None:
     migration_marker = tmp_path / ".nightshift/config/migration.yaml"
     migration_marker.parent.mkdir(parents=True, exist_ok=True)
     migration_marker.write_text(
@@ -308,8 +327,33 @@ runtime_layout_source: layered
 """
     )
 
+    resolved = resolve_runtime_storage(tmp_path)
+
+    assert resolved.mode is RuntimeStorageMode.LAYERED
+    assert resolved.records_root == tmp_path / ".nightshift" / "records" / "current"
+    assert resolved.active_run_path == tmp_path / ".nightshift" / "records" / "active-run.json"
+    assert resolved.runs_root == tmp_path / ".nightshift" / "runs"
+    assert resolved.alerts_path == tmp_path / ".nightshift" / "records" / "alerts.ndjson"
+    assert resolved.artifacts_root == tmp_path / ".nightshift" / "artifacts"
+    assert resolved.reports_root == tmp_path / ".nightshift" / "reports"
+    assert resolved.migration_marker_path == migration_marker
+
+
+def test_resolve_runtime_storage_rejects_layered_without_layered_project_config(
+    tmp_path: Path,
+) -> None:
+    migration_marker = tmp_path / ".nightshift/config/migration.yaml"
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: compatibility
+runtime_layout_source: layered
+"""
+    )
+
     with pytest.raises(ValueError, match="runtime_layout_source=layered"):
-        resolve_project_config_source(tmp_path)
+        resolve_runtime_storage(tmp_path)
 
 
 def test_load_config_requires_complete_default_attempt_limits(tmp_path: Path) -> None:

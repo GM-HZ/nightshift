@@ -11,6 +11,8 @@ from .models import (
     NightShiftConfig,
     ResolvedConfigSource,
     ResolvedContractStorage,
+    ResolvedRuntimeStorage,
+    RuntimeStorageMode,
 )
 
 _COMPATIBILITY_CONFIG_PATH = Path("nightshift.yaml")
@@ -85,6 +87,46 @@ def resolve_contract_storage(repo_root: Path) -> ResolvedContractStorage:
     )
 
 
+def resolve_runtime_storage(repo_root: Path) -> ResolvedRuntimeStorage:
+    marker_path = repo_root / _MIGRATION_MARKER_PATH
+    if not marker_path.exists():
+        return ResolvedRuntimeStorage(
+            mode=RuntimeStorageMode.COMPATIBILITY,
+            records_root=repo_root / "nightshift-data" / "issue-records",
+            active_run_path=repo_root / "nightshift-data" / "active-run.json",
+            runs_root=repo_root / "nightshift-data" / "runs",
+            alerts_path=repo_root / "nightshift-data" / "alerts.ndjson",
+            artifacts_root=repo_root / "nightshift-data" / "runs",
+            reports_root=repo_root / "nightshift-data" / "reports",
+            migration_marker_path=marker_path,
+        )
+
+    marker = _load_migration_marker(marker_path)
+    _validate_migration_marker(marker)
+    if marker.runtime_layout_source == "layered":
+        return ResolvedRuntimeStorage(
+            mode=RuntimeStorageMode.LAYERED,
+            records_root=repo_root / ".nightshift" / "records" / "current",
+            active_run_path=repo_root / ".nightshift" / "records" / "active-run.json",
+            runs_root=repo_root / ".nightshift" / "runs",
+            alerts_path=repo_root / ".nightshift" / "records" / "alerts.ndjson",
+            artifacts_root=repo_root / ".nightshift" / "artifacts",
+            reports_root=repo_root / ".nightshift" / "reports",
+            migration_marker_path=marker_path,
+        )
+
+    return ResolvedRuntimeStorage(
+        mode=RuntimeStorageMode.COMPATIBILITY,
+        records_root=repo_root / "nightshift-data" / "issue-records",
+        active_run_path=repo_root / "nightshift-data" / "active-run.json",
+        runs_root=repo_root / "nightshift-data" / "runs",
+        alerts_path=repo_root / "nightshift-data" / "alerts.ndjson",
+        artifacts_root=repo_root / "nightshift-data" / "runs",
+        reports_root=repo_root / "nightshift-data" / "reports",
+        migration_marker_path=marker_path,
+    )
+
+
 def load_project_config(repo_root: Path) -> NightShiftConfig:
     resolved_source = resolve_project_config_source(repo_root)
     if resolved_source.mode == LayoutMode.LAYERED_PROJECT_CONFIG and not resolved_source.path.exists():
@@ -104,9 +146,7 @@ def _load_migration_marker(path: Path) -> MigrationMarkerConfig:
 def _validate_migration_marker(marker: MigrationMarkerConfig) -> None:
     if marker.layout_version != 1:
         raise ValueError(f"unsupported migration layout_version: {marker.layout_version}")
-    if marker.runtime_layout_source not in (None, "compatibility"):
-        raise ValueError(
-            "runtime_layout_source=layered is not supported during Phase 1 layered project config migration"
-        )
+    if marker.runtime_layout_source == "layered" and marker.project_config_source != "layered":
+        raise ValueError("runtime_layout_source=layered requires project_config_source=layered")
     if marker.contract_storage_source == "layered" and marker.project_config_source != "layered":
         raise ValueError("contract_storage_source=layered requires project_config_source=layered")

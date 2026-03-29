@@ -16,6 +16,8 @@ Typical compatibility paths are:
 - `nightshift-data/issue-records/`
 - `nightshift-data/runs/`
 - `nightshift-data/active-run.json`
+- `nightshift-data/alerts.ndjson`
+- `nightshift-data/reports/`
 
 The compatibility config controls:
 
@@ -64,6 +66,25 @@ That moves frozen contracts to:
 - `.nightshift/contracts/current/`
 - `.nightshift/contracts/history/`
 
+For a repository that has also entered Phase 3 runtime migration, the marker should include:
+
+```yaml
+project_config_source: layered
+contract_storage_source: layered
+runtime_layout_source: layered
+```
+
+That moves runtime-only state to:
+
+- `.nightshift/records/current/`
+- `.nightshift/records/active-run.json`
+- `.nightshift/records/alerts.ndjson`
+- `.nightshift/runs/`
+- `.nightshift/artifacts/`
+- `.nightshift/reports/`
+
+If `report.output_directory` is configured explicitly, that path still wins for report writes. The runtime resolver only supplies the default layered report root.
+
 If the marker instead declares `project_config_source: compatibility`, NightShift continues to load the root `nightshift.yaml`.
 
 ## Queue Add Freeze Point
@@ -86,6 +107,8 @@ The broader long-term model is still split into:
 - project space: `<repo>/.nightshift/`
 
 That broader target model is still a design direction in the docs. Do not treat it as the current on-disk layout unless the specific repository has already migrated.
+
+For migrated repositories, the runtime portion of the project layout lives under `.nightshift/` after the repository has entered layered project config and then opted into Phase 3 runtime migration.
 
 ## Practical Rule
 

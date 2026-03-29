@@ -21,6 +21,17 @@ Use the current compatibility layout first:
 
 Keep the target `~/.nightshift/` and `<repo>/.nightshift/` model in mind as the next-stage direction, but do not assume it is already active unless that repository has been migrated.
 
+When a repository opts into Phase 3 runtime migration, runtime-only state moves under `.nightshift/`:
+
+- `.nightshift/records/current/`
+- `.nightshift/records/active-run.json`
+- `.nightshift/records/alerts.ndjson`
+- `.nightshift/runs/`
+- `.nightshift/artifacts/`
+- `.nightshift/reports/`
+
+Compatibility repositories continue to use `nightshift-data/` unchanged.
+
 ## Branch And PR Assumptions
 
 NightShift expects execution to happen on a branch and to surface reviewable work before merge.
@@ -41,3 +52,4 @@ NightShift expects execution to happen on a branch and to surface reviewable wor
 
 - If your team uses multiple worktrees, follow [../local-development.md](../local-development.md) so you do not run the wrong editable install.
 - If you are still choosing the repository config shape, start from [../../examples/nightshift.yaml](../../examples/nightshift.yaml) and keep the target layered model separate from the current compatibility layout.
+- For report outputs, an explicit `report.output_directory` still overrides the default runtime report root.

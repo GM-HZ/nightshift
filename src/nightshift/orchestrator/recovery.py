@@ -292,7 +292,12 @@ class RecoveryOrchestrator:
         return AttemptRecord.model_validate(payload)
 
     def _artifact_dir(self, run_id: str, attempt_id: str) -> Path:
-        return Path(self.state_store.root) / "nightshift-data" / "runs" / run_id / "artifacts" / "attempts" / attempt_id
+        runtime_storage = getattr(self.state_store, "runtime_storage", None)
+        if runtime_storage is not None:
+            base_dir = runtime_storage.artifacts_root
+        else:
+            base_dir = Path(self.state_store.root) / "nightshift-data" / "runs"
+        return Path(base_dir) / run_id / "artifacts" / "attempts" / attempt_id
 
     def _update_issue_record(
         self,

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
@@ -297,6 +298,34 @@ def test_recovery_reruns_validation_for_validating_attempt() -> None:
     assert recovery_run_state.active_issue_id is None
     assert recovery_run_state.active_attempt_id is None
     assert state_store.active_runs[-1] is None
+
+
+def test_recovery_defaults_to_runtime_storage_artifact_root_when_available() -> None:
+    run_state = make_run_state("run-1", active_attempt_id="ATTEMPT-1")
+    validation_result = AttemptValidationResult(
+        passed=True,
+        summary="validation passed",
+        details={"checks": 1},
+    )
+    attempt_record = make_attempt_record(
+        attempt_id="ATTEMPT-1",
+        run_id="run-1",
+        attempt_state=AttemptState.validating,
+        engine_outcome="normalized engine output",
+        validation_result=validation_result,
+    )
+    orchestrator, _issue_registry, state_store, _validation_gate = make_recovery_orchestrator(
+        run_state=run_state,
+        attempt_record=attempt_record,
+        validation_passed=True,
+        ids=["recovery-run-1", "recovery-attempt-1"],
+    )
+    state_store.runtime_storage = SimpleNamespace(artifacts_root=Path("/tmp/runtime-artifacts"))
+
+    orchestrator.recover_run("run-1")
+
+    assert state_store.saved_attempt_records[0].artifact_dir == "/tmp/runtime-artifacts/recovery-run-1/artifacts/attempts/recovery-attempt-1"
+    assert state_store.saved_attempt_records[-1].artifact_dir == "/tmp/runtime-artifacts/recovery-run-1/artifacts/attempts/recovery-attempt-1"
 
 
 def test_recover_command_emits_recovery_run_id(monkeypatch, tmp_path: Path) -> None:

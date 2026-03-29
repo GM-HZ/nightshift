@@ -120,6 +120,11 @@ class ContractStorageMode(str, Enum):
     LAYERED = "layered"
 
 
+class RuntimeStorageMode(str, Enum):
+    COMPATIBILITY = "compatibility"
+    LAYERED = "layered"
+
+
 class MigrationMarkerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -141,6 +146,18 @@ class ResolvedContractStorage:
     mode: ContractStorageMode
     current_path: Path
     history_path: Path
+    migration_marker_path: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedRuntimeStorage:
+    mode: RuntimeStorageMode
+    records_root: Path
+    active_run_path: Path
+    runs_root: Path
+    alerts_path: Path
+    artifacts_root: Path
+    reports_root: Path
     migration_marker_path: Path | None = None
 
 

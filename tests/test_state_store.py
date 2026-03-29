@@ -6,6 +6,7 @@ import pytest
 from nightshift.domain import AlertEvent, AttemptRecord, EventRecord, IssueState
 from nightshift.domain.enums import RunState as RunLifecycleState
 from nightshift.domain.records import IssueRecord, RunState as RunStateRecord
+from nightshift.config.models import RuntimeStorageMode
 from nightshift.store.state_store import StateStore
 from nightshift.store.filesystem import write_json
 
@@ -85,6 +86,19 @@ def make_alert(alert_id: str, run_id: str, *, issue_id: str | None = None, sever
     )
 
 
+def _write_layered_runtime_marker(repo_root: Path) -> None:
+    migration_marker = repo_root / ".nightshift/config/migration.yaml"
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: layered
+contract_storage_source: layered
+"""
+    )
+
+
 def test_state_store_saves_and_loads_run_state(tmp_path: Path) -> None:
     store = StateStore(tmp_path)
     run_state = make_run_state("run-1")
@@ -134,6 +148,30 @@ def test_state_store_tracks_active_run(tmp_path: Path) -> None:
     store.set_active_run(None)
     assert store.get_active_run() is None
     assert (tmp_path / "nightshift-data" / "active-run.json").is_file()
+
+
+def test_state_store_uses_layered_runtime_paths_when_marker_declares_layered(tmp_path: Path) -> None:
+    _write_layered_runtime_marker(tmp_path)
+    store = StateStore(tmp_path)
+
+    assert store.runtime_storage.mode is RuntimeStorageMode.LAYERED
+    assert store.runtime_storage.records_root == tmp_path / ".nightshift" / "records" / "current"
+    assert store.runtime_storage.active_run_path == tmp_path / ".nightshift" / "records" / "active-run.json"
+    assert store.runtime_storage.runs_root == tmp_path / ".nightshift" / "runs"
+    assert store.runtime_storage.alerts_path == tmp_path / ".nightshift" / "records" / "alerts.ndjson"
+
+    run_state = make_run_state("run-layered")
+    store.save_run_state(run_state)
+    store.set_active_run("run-layered")
+    store.append_alert(make_alert("ALERT-LAYERED", "run-layered"))
+    store.append_event(make_event(1, "run-layered"))
+
+    assert store.load_run_state("run-layered") == run_state
+    assert store.get_active_run() == "run-layered"
+    assert (tmp_path / ".nightshift" / "runs" / "run-layered" / "run-state.json").is_file()
+    assert (tmp_path / ".nightshift" / "records" / "active-run.json").is_file()
+    assert (tmp_path / ".nightshift" / "records" / "alerts.ndjson").is_file()
+    assert (tmp_path / ".nightshift" / "runs" / "run-layered" / "events.ndjson").is_file()
 
 
 def test_state_store_saves_and_lists_run_issue_snapshots(tmp_path: Path) -> None:

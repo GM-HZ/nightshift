@@ -5,6 +5,7 @@ from pathlib import Path
 from nightshift.domain import AlertEvent, AttemptRecord, EventRecord, RunState
 from nightshift.domain.enums import AlertSeverity
 from nightshift.domain.records import IssueRecord
+from nightshift.config.loader import resolve_runtime_storage
 from nightshift.store.filesystem import (
     append_ndjson,
     read_json,
@@ -19,6 +20,7 @@ from nightshift.store.filesystem import (
 class StateStore:
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root)
+        self.runtime_storage = resolve_runtime_storage(self.root)
 
     def save_run_state(self, run_state: RunState) -> None:
         write_model_json(self._run_state_path(run_state.run_id), run_state)
@@ -111,7 +113,7 @@ class StateStore:
         return alerts
 
     def _runs_dir(self) -> Path:
-        return self.root / "nightshift-data" / "runs"
+        return self.runtime_storage.runs_root
 
     def _run_state_path(self, run_id: str) -> Path:
         safe_run_id = safe_path_component(run_id, field_name="run_id")
@@ -149,7 +151,7 @@ class StateStore:
         return self._runs_dir() / safe_run_id / "events.ndjson"
 
     def _alerts_path(self) -> Path:
-        return self.root / "nightshift-data" / "alerts.ndjson"
+        return self.runtime_storage.alerts_path
 
     def _active_run_path(self) -> Path:
-        return self.root / "nightshift-data" / "active-run.json"
+        return self.runtime_storage.active_run_path

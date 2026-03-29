@@ -44,7 +44,6 @@ def build_run_orchestrator(repo_root: Path, config: object) -> RunOrchestrator:
             default_adapter_name=getattr(config.runner, "default_engine", None),
         ),
         validation_gate=validation_gate,
-        artifact_root=getattr(config.workspace, "artifact_root", None),
     )
 
 
@@ -138,7 +137,7 @@ def run_one(
         result = orchestrator.run_one(issue_id)
     except Exception as error:
         typer.echo(
-            f"run-one failed for {issue_id}: {error}. Inspect nightshift-data/runs/ for persisted state and artifacts.",
+            f"run-one failed for {issue_id}: {error}. Inspect the runtime runs root (nightshift-data/runs/ for compatibility or .nightshift/runs/ for layered repos) for persisted state and artifacts.",
             err=True,
         )
         raise typer.Exit(1) from error

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
@@ -452,6 +453,16 @@ def test_run_orchestrator_uses_configured_artifact_root() -> None:
     assert state_store.saved_attempt_records[-1].artifact_dir == "/tmp/custom-artifacts/RUN-1/artifacts/attempts/ATTEMPT-1"
 
 
+def test_run_orchestrator_defaults_to_runtime_storage_artifact_root_when_available() -> None:
+    orchestrator, _issue_registry, state_store, _workspace_manager, _engine_registry = make_orchestrator(validation_passed=True)
+    state_store.runtime_storage = SimpleNamespace(artifacts_root=Path("/tmp/runtime-artifacts"))
+
+    result = orchestrator.run_one("ISSUE-1")
+
+    assert result.run_id == "RUN-1"
+    assert state_store.saved_attempt_records[-1].artifact_dir == "/tmp/runtime-artifacts/RUN-1/artifacts/attempts/ATTEMPT-1"
+
+
 def test_run_one_cli_uses_builder_and_prints_result(tmp_path: Path, monkeypatch) -> None:
     config_path = tmp_path / "nightshift.yaml"
     config_path.write_text("project:\n  repo_path: .\n  main_branch: main\nrunner:\n  default_engine: codex\n  issue_timeout_seconds: 1\n  overnight_timeout_seconds: 1\nvalidation:\n  enabled: true\nissue_defaults:\n  default_priority: high\n  default_forbidden_paths: [secrets]\n  default_test_edit_policy:\n    can_add_tests: true\n    can_modify_existing_tests: true\n    can_weaken_assertions: false\n    requires_test_change_reason: true\n  default_attempt_limits:\n    max_files_changed: 1\n    max_lines_added: 1\n    max_lines_deleted: 1\n  default_timeouts:\n    command_seconds: 1\n    issue_budget_seconds: 1\nretry:\n  max_retries: 1\n  retry_policy: never\n  failure_circuit_breaker: false\nworkspace:\n  worktree_root: .nightshift/worktrees\n  artifact_root: nightshift-data/runs\nalerts:\n  enabled_channels: []\n  severity_thresholds:\n    info: info\n    warning: warning\n    critical: critical\nreport:\n  output_directory: nightshift-data/reports\n  summary_verbosity: concise\n")
@@ -571,4 +582,6 @@ def test_run_one_cli_surfaces_operator_friendly_failure_summary(tmp_path: Path, 
     assert result.exit_code == 1
     assert "run-one failed for ISSUE-1" in result.stderr
     assert "engine outcome engine_crash cannot be accepted" in result.stderr
+    assert "nightshift-data/runs/" in result.stderr
+    assert ".nightshift/runs/" in result.stderr
     assert "Traceback" not in result.stderr
