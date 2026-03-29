@@ -1,16 +1,24 @@
 from pathlib import Path
 import json
+import subprocess
 
 import typer
 
 from nightshift.config.loader import load_config
 from nightshift.config.loader import load_project_config
+from nightshift.domain import DeliveryState
 from nightshift.config.models import NightShiftConfig
 from nightshift.engines.codex_adapter import CodexAdapter
 from nightshift.engines.claude_code_adapter import ClaudeCodeAdapter
 from nightshift.engines.registry import EngineRegistry
 from nightshift.orchestrator import RunOrchestrator
 from nightshift.orchestrator.recovery import RecoveryOrchestrator
+from nightshift.product.delivery import deliver_issue
+from nightshift.product.delivery.github_client import (
+    GitHubPullRequestClient,
+    GitHubPullRequestClientError,
+    resolve_delivery_github_token,
+)
 from nightshift.product.execution_selection import (
     ExecutionSelectionBatchRequest,
     execute_selection_batch,
@@ -160,6 +168,45 @@ def _default_issue_author_allowlist(repo_full_name: str) -> tuple[str, ...]:
     return ()
 
 
+def _parse_csv_issue_ids(issues: str) -> tuple[str, ...]:
+    parsed = tuple(part.strip() for part in issues.split(",") if part.strip())
+    if not parsed:
+        raise typer.BadParameter("--issues must include at least one issue id")
+    return parsed
+
+
+def _push_delivery_branch(*, repo_root: Path, snapshot: dict[str, object]) -> None:
+    branch_name = str(snapshot.get("branch_name") or "").strip()
+    if not branch_name:
+        raise RuntimeError("delivery snapshot is missing branch_name")
+    subprocess.run(
+        ["git", "-C", str(repo_root), "push", "origin", branch_name],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _build_delivery_pr_body(snapshot: dict[str, object]) -> str:
+    source_issue = snapshot.get("source_issue") or {}
+    source_issue_ref = ""
+    if isinstance(source_issue, dict):
+        repo = str(source_issue.get("repo") or "").strip()
+        number = source_issue.get("number")
+        if repo and number is not None:
+            source_issue_ref = f"{repo}#{number}"
+    lines = [
+        "Created by NightShift delivery.",
+        "",
+        f"- work_order_id: {snapshot.get('work_order_id')}",
+        f"- run_id: {snapshot.get('run_id')}",
+        f"- attempt_id: {snapshot.get('attempt_id')}",
+    ]
+    if source_issue_ref:
+        lines.append(f"- source_issue: {source_issue_ref}")
+    return "\n".join(lines)
+
+
 @app.command("run")
 def run(
     issues: str | None = typer.Option(None, "--issues", help="Comma-separated issue ids to execute in order."),
@@ -268,6 +315,59 @@ def issue_ingest_github(
     typer.echo(
         f"issue ingest-github: {action} {result.summary.work_order_id} from {result.summary.repo_full_name}#{result.summary.issue_number}"
     )
+
+
+@app.command("deliver")
+def deliver(
+    issues: str = typer.Option(..., "--issues", help="Comma-separated issue ids to deliver."),
+    repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    config: Path | None = typer.Option(None, "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+) -> None:
+    loaded_config = _load_cli_config(repo, config, require_repo_config=True)
+    repo_root = _resolve_repo_root(repo, loaded_config)
+    issue_ids = _parse_csv_issue_ids(issues)
+    issue_registry = build_issue_registry(repo_root)
+    state_store = StateStore(repo_root)
+
+    try:
+        token = resolve_delivery_github_token()
+        client = GitHubPullRequestClient(token=token)
+    except GitHubPullRequestClientError as error:
+        typer.echo(f"deliver failed: {error}", err=True)
+        raise typer.Exit(1) from error
+
+    for issue_id in issue_ids:
+        try:
+            result = deliver_issue(
+                issue_id,
+                issue_registry=issue_registry,
+                state_store=state_store,
+                snapshot_root=state_store.runtime_storage.artifacts_root,
+                push_delivery=lambda *, snapshot, _repo_root=repo_root: _push_delivery_branch(
+                    repo_root=_repo_root,
+                    snapshot=snapshot,
+                ),
+                create_pr=lambda *, issue_record, snapshot, _client=client, _base=loaded_config.project.main_branch: _client.create_pull_request(
+                    repo_full_name=(
+                        f"{snapshot['source_issue']['repo']}"
+                        if isinstance(snapshot.get("source_issue"), dict)
+                        and snapshot["source_issue"].get("repo")
+                        else ""
+                    ),
+                    title=f"{issue_record.issue_id}: accepted NightShift delivery",
+                    body=_build_delivery_pr_body(snapshot),
+                    head=str(snapshot.get("branch_name") or ""),
+                    base=_base,
+                    issue_id=issue_record.issue_id,
+                ),
+            )
+        except Exception as error:
+            typer.echo(f"deliver failed for {issue_id}: {error}", err=True)
+            raise typer.Exit(1) from error
+
+        typer.echo(
+            f"{result.issue_id} {result.delivery_state} delivery_id={result.delivery_id} delivery_ref={result.delivery_ref}"
+        )
 
 
 @queue_app.command("status")
