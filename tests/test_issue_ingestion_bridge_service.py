@@ -370,6 +370,24 @@ def test_resolve_github_token_rejects_missing_token(monkeypatch) -> None:
         resolve_github_token()
 
 
+def test_resolve_github_token_falls_back_to_user_space_auth(monkeypatch) -> None:
+    monkeypatch.delenv("NIGHTSHIFT_GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    class AuthConfig:
+        token = "user-space-token"
+        token_env_var = None
+
+    monkeypatch.setattr(
+        "nightshift.product.issue_ingestion_bridge.github_client.load_github_auth_config",
+        lambda: AuthConfig(),
+    )
+
+    token = resolve_github_token()
+
+    assert token == "user-space-token"
+
+
 def test_github_issue_client_fetches_and_normalizes_payload(monkeypatch) -> None:
     payload = {
         "title": "Add Chinese README",

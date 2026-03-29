@@ -152,6 +152,65 @@ def test_issue_ingest_github_runs_bridge_and_reports_summary(tmp_path: Path, mon
     assert "created" in result.stdout.lower()
 
 
+def test_issue_ingest_github_uses_user_default_repo_full_name_when_flag_is_omitted(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo_root = tmp_path
+    config_path = write_config(repo_root)
+    observed: dict[str, object] = {}
+
+    monkeypatch.setattr("nightshift.cli.app.resolve_github_token", lambda: "token")
+    monkeypatch.setattr(
+        "nightshift.cli.app.load_user_config",
+        lambda: type(
+            "UserConfigStub",
+            (),
+            {
+                "github": type(
+                    "GitHubConfigStub",
+                    (),
+                    {"default_repo_full_name": "GM-HZ/nightshift"},
+                )()
+            },
+        )(),
+    )
+
+    class FakeClient:
+        def __init__(self, *, token: str) -> None:
+            pass
+
+        def fetch_issue(self, repo_full_name: str, issue_number: int) -> GitHubIssuePayload:
+            observed["repo_full_name"] = repo_full_name
+            return make_payload()
+
+    monkeypatch.setattr("nightshift.cli.app.GitHubIssueClient", FakeClient)
+    monkeypatch.setattr(
+        "nightshift.cli.app.bridge_github_issue_to_work_order",
+        lambda payload, *, config, author_allowlist, required_label="nightshift": make_draft(),
+    )
+    monkeypatch.setattr(
+        "nightshift.cli.app.write_bridge_draft_to_work_order",
+        lambda *, repo_root, payload, draft, update_existing: make_result(),
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "issue",
+            "ingest-github",
+            "--issue",
+            "7",
+            "--repo",
+            str(repo_root),
+            "--config",
+            str(config_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert observed["repo_full_name"] == "GM-HZ/nightshift"
+
+
 def test_issue_ingest_github_surfaces_bridge_errors_without_traceback(
     tmp_path: Path, monkeypatch
 ) -> None:

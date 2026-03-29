@@ -5,6 +5,7 @@ import subprocess
 import typer
 
 from nightshift.config.loader import load_config
+from nightshift.config.loader import load_user_config
 from nightshift.config.loader import load_project_config
 from nightshift.domain import DeliveryState
 from nightshift.config.models import NightShiftConfig
@@ -168,6 +169,20 @@ def _default_issue_author_allowlist(repo_full_name: str) -> tuple[str, ...]:
     return ()
 
 
+def _resolve_repo_full_name(explicit_repo_full_name: str | None) -> str:
+    if explicit_repo_full_name and explicit_repo_full_name.strip():
+        return explicit_repo_full_name.strip()
+
+    user_config = load_user_config()
+    default_repo_full_name = None
+    if user_config is not None:
+        default_repo_full_name = getattr(user_config.github, "default_repo_full_name", None)
+    if default_repo_full_name:
+        return default_repo_full_name
+
+    raise typer.BadParameter("--repo-full-name is required unless user config sets github.default_repo_full_name")
+
+
 def _parse_csv_issue_ids(issues: str) -> tuple[str, ...]:
     parsed = tuple(part.strip() for part in issues.split(",") if part.strip())
     if not parsed:
@@ -284,7 +299,7 @@ def report(
 
 @issue_app.command("ingest-github")
 def issue_ingest_github(
-    repo_full_name: str = typer.Option(..., "--repo-full-name"),
+    repo_full_name: str | None = typer.Option(None, "--repo-full-name"),
     issue: int = typer.Option(..., "--issue", min=1),
     repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
     config: Path | None = typer.Option(None, "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
@@ -292,14 +307,15 @@ def issue_ingest_github(
 ) -> None:
     loaded_config = _load_cli_config(repo, config, require_repo_config=True)
     repo_root = _resolve_repo_root(repo, loaded_config)
+    resolved_repo_full_name = _resolve_repo_full_name(repo_full_name)
 
     try:
         token = resolve_github_token()
-        payload = GitHubIssueClient(token=token).fetch_issue(repo_full_name, issue)
+        payload = GitHubIssueClient(token=token).fetch_issue(resolved_repo_full_name, issue)
         draft = bridge_github_issue_to_work_order(
             payload,
             config=loaded_config,
-            author_allowlist=_default_issue_author_allowlist(repo_full_name),
+            author_allowlist=_default_issue_author_allowlist(resolved_repo_full_name),
         )
         result = write_bridge_draft_to_work_order(
             repo_root=repo_root,

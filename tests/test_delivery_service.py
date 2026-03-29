@@ -264,6 +264,22 @@ def test_resolve_delivery_github_token_rejects_missing_token(monkeypatch) -> Non
         resolve_delivery_github_token()
 
 
+def test_resolve_delivery_github_token_falls_back_to_user_space_auth(monkeypatch) -> None:
+    monkeypatch.delenv("NIGHTSHIFT_GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    class AuthConfig:
+        token = "user-space-token"
+        token_env_var = None
+
+    monkeypatch.setattr(
+        "nightshift.product.delivery.github_client.load_github_auth_config",
+        lambda: AuthConfig(),
+    )
+
+    assert resolve_delivery_github_token() == "user-space-token"
+
+
 def test_github_pull_request_client_creates_pr_and_normalizes_result(monkeypatch) -> None:
     observed: dict[str, object] = {}
 

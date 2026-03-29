@@ -5,7 +5,10 @@ from pydantic import ValidationError
 
 from nightshift.config.loader import (
     load_config,
+    load_github_auth_config,
+    load_user_config,
     load_project_config,
+    resolve_user_space_root,
     resolve_contract_storage,
     resolve_project_config_source,
     resolve_runtime_storage,
@@ -143,6 +146,64 @@ report:
 
     with pytest.raises(ValidationError):
         load_config(config_path)
+
+
+def test_resolve_user_space_root_defaults_to_home_dot_nightshift(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("NIGHTSHIFT_HOME", raising=False)
+    monkeypatch.setenv("HOME", "/tmp/nightshift-home")
+
+    resolved = resolve_user_space_root()
+
+    assert resolved == Path("/tmp/nightshift-home/.nightshift")
+
+
+def test_resolve_user_space_root_prefers_nightshift_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NIGHTSHIFT_HOME", "/tmp/custom-nightshift")
+
+    resolved = resolve_user_space_root()
+
+    assert resolved == Path("/tmp/custom-nightshift")
+
+
+def test_load_user_config_reads_user_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    user_root = tmp_path / ".nightshift"
+    monkeypatch.setenv("NIGHTSHIFT_HOME", str(user_root))
+    config_path = user_root / "config" / "user.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        """
+runner:
+  default_engine: codex
+  fallback_engine: claude
+github:
+  default_repo_full_name: GM-HZ/nightshift
+"""
+    )
+
+    config = load_user_config()
+
+    assert config is not None
+    assert config.runner.default_engine == "codex"
+    assert config.github.default_repo_full_name == "GM-HZ/nightshift"
+
+
+def test_load_github_auth_config_reads_private_auth_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    user_root = tmp_path / ".nightshift"
+    monkeypatch.setenv("NIGHTSHIFT_HOME", str(user_root))
+    auth_path = user_root / "auth" / "github.yaml"
+    auth_path.parent.mkdir(parents=True, exist_ok=True)
+    auth_path.write_text(
+        """
+token_env_var: NIGHTSHIFT_GITHUB_TOKEN
+api_base_url: https://api.github.com
+"""
+    )
+
+    auth = load_github_auth_config()
+
+    assert auth is not None
+    assert auth.token_env_var == "NIGHTSHIFT_GITHUB_TOKEN"
+    assert auth.api_base_url == "https://api.github.com"
 
 
 def test_resolve_project_config_source_defaults_to_compatibility_without_marker(tmp_path: Path) -> None:

@@ -110,6 +110,34 @@ class ReportConfig(BaseModel):
     summary_verbosity: NonEmptyStr
 
 
+class UserRunnerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    default_engine: NonEmptyStr | None = None
+    fallback_engine: NonEmptyStr | None = None
+
+
+class UserGitHubConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    default_repo_full_name: NonEmptyStr | None = None
+
+
+class UserConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    runner: UserRunnerConfig = Field(default_factory=UserRunnerConfig)
+    github: UserGitHubConfig = Field(default_factory=UserGitHubConfig)
+
+
+class GitHubAuthConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: NonEmptyStr | None = None
+    token_env_var: NonEmptyStr | None = None
+    api_base_url: NonEmptyStr | None = None
+
+
 class LayoutMode(str, Enum):
     COMPATIBILITY = "compatibility"
     LAYERED_PROJECT_CONFIG = "layered_project_config"

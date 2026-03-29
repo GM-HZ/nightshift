@@ -4,6 +4,7 @@ import json
 import os
 from urllib import error, request
 
+from nightshift.config.loader import load_github_auth_config
 from nightshift.domain import DeliveryState
 from nightshift.product.delivery.models import DeliveryWriteResult
 
@@ -17,6 +18,14 @@ def resolve_delivery_github_token() -> str:
         value = os.environ.get(variable, "").strip()
         if value:
             return value
+    auth = load_github_auth_config()
+    if auth is not None:
+        if auth.token_env_var:
+            value = os.environ.get(auth.token_env_var, "").strip()
+            if value:
+                return value
+        if auth.token:
+            return auth.token
     raise GitHubPullRequestClientError(
         "missing GitHub token; set NIGHTSHIFT_GITHUB_TOKEN or GITHUB_TOKEN"
     )

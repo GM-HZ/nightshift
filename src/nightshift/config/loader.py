@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 
 import yaml
 
 from .models import (
     ContractStorageMode,
+    GitHubAuthConfig,
     LayoutMode,
     MigrationMarkerConfig,
     NightShiftConfig,
@@ -13,11 +15,14 @@ from .models import (
     ResolvedContractStorage,
     ResolvedRuntimeStorage,
     RuntimeStorageMode,
+    UserConfig,
 )
 
 _COMPATIBILITY_CONFIG_PATH = Path("nightshift.yaml")
 _MIGRATION_MARKER_PATH = Path(".nightshift/config/migration.yaml")
 _LAYERED_PROJECT_CONFIG_PATH = Path(".nightshift/config/project.yaml")
+_USER_CONFIG_PATH = Path("config/user.yaml")
+_GITHUB_AUTH_PATH = Path("auth/github.yaml")
 
 
 def load_config(path: Path) -> NightShiftConfig:
@@ -28,6 +33,37 @@ def load_config(path: Path) -> NightShiftConfig:
         raise ValueError("nightshift config root must be a mapping")
 
     return NightShiftConfig.model_validate(data)
+
+
+def resolve_user_space_root() -> Path:
+    configured = os.environ.get("NIGHTSHIFT_HOME", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / ".nightshift"
+
+
+def load_user_config() -> UserConfig | None:
+    path = resolve_user_space_root() / _USER_CONFIG_PATH
+    if not path.exists():
+        return None
+    data = yaml.safe_load(path.read_text())
+    if data is None:
+        data = {}
+    elif not isinstance(data, dict):
+        raise ValueError("user config root must be a mapping")
+    return UserConfig.model_validate(data)
+
+
+def load_github_auth_config() -> GitHubAuthConfig | None:
+    path = resolve_user_space_root() / _GITHUB_AUTH_PATH
+    if not path.exists():
+        return None
+    data = yaml.safe_load(path.read_text())
+    if data is None:
+        data = {}
+    elif not isinstance(data, dict):
+        raise ValueError("github auth config root must be a mapping")
+    return GitHubAuthConfig.model_validate(data)
 
 
 def resolve_project_config_source(repo_root: Path) -> ResolvedConfigSource:
