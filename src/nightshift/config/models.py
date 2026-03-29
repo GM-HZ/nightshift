@@ -115,18 +115,32 @@ class LayoutMode(str, Enum):
     LAYERED_PROJECT_CONFIG = "layered_project_config"
 
 
+class ContractStorageMode(str, Enum):
+    COMPATIBILITY = "compatibility"
+    LAYERED = "layered"
+
+
 class MigrationMarkerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     layout_version: PositiveInt = 1
     project_config_source: Literal["compatibility", "layered"]
     runtime_layout_source: Literal["compatibility", "layered"] | None = None
+    contract_storage_source: Literal["compatibility", "layered"] | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ResolvedConfigSource:
     mode: LayoutMode
     path: Path
+    migration_marker_path: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedContractStorage:
+    mode: ContractStorageMode
+    current_path: Path
+    history_path: Path
     migration_marker_path: Path | None = None
 
 

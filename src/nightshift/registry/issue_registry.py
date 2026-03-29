@@ -6,6 +6,7 @@ from pathlib import Path
 from nightshift.domain import AttemptState, DeliveryState, IssueKind, IssueState
 from nightshift.domain.contracts import IssueContract
 from nightshift.domain.records import IssueRecord
+from nightshift.config.loader import resolve_contract_storage
 from nightshift.store.filesystem import (
     read_model_json,
     read_model_yaml,
@@ -26,6 +27,7 @@ class IssueRegistry:
 
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root)
+        self._contract_storage = resolve_contract_storage(self.root)
 
     def save_contract(self, issue_contract: IssueContract) -> None:
         path = self._contract_path(issue_contract.issue_id)
@@ -122,13 +124,13 @@ class IssueRegistry:
         return [read_model_json(path, IssueRecord) for path in sorted(self._records_dir().glob("*.json"))]
 
     def _contracts_dir(self) -> Path:
-        return self.root / "nightshift" / "issues"
+        return self._contract_storage.current_path
 
     def _records_dir(self) -> Path:
         return self.root / "nightshift-data" / "issue-records"
 
     def _contract_revisions_root(self) -> Path:
-        return self.root / "nightshift" / "contracts"
+        return self._contract_storage.history_path
 
     def _contract_path(self, issue_id: str) -> Path:
         safe_issue_id = safe_path_component(issue_id, field_name="issue_id")

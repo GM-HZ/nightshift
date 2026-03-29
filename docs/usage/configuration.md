@@ -53,6 +53,17 @@ When the marker declares `project_config_source: layered`:
 - product-facing CLI paths that accept `--repo` can resolve config from the repository root when `--config` is omitted
 - runtime state still remains on the compatibility layout during Phase 1
 
+If the repository also enters Phase 2 contract storage migration, the marker can add:
+
+```yaml
+contract_storage_source: layered
+```
+
+That moves frozen contracts to:
+
+- `.nightshift/contracts/current/`
+- `.nightshift/contracts/history/`
+
 If the marker instead declares `project_config_source: compatibility`, NightShift continues to load the root `nightshift.yaml`.
 
 ## Queue Add Freeze Point

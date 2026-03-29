@@ -4,7 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from nightshift.config.loader import load_config, load_project_config, resolve_project_config_source
-from nightshift.config.models import LayoutMode
+from nightshift.config.loader import resolve_contract_storage
+from nightshift.config.models import ContractStorageMode, LayoutMode
 
 
 def _write_complete_config(path: Path, *, repo_path: str, default_engine: str) -> None:
@@ -146,6 +147,69 @@ def test_resolve_project_config_source_defaults_to_compatibility_without_marker(
     assert resolved.mode is LayoutMode.COMPATIBILITY
     assert resolved.path == repo_root / "nightshift.yaml"
     assert resolved.migration_marker_path == repo_root / ".nightshift/config/migration.yaml"
+
+
+def test_resolve_contract_storage_defaults_to_compatibility_without_explicit_marker(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path
+    migration_marker = repo_root / ".nightshift/config/migration.yaml"
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: compatibility
+"""
+    )
+
+    resolved = resolve_contract_storage(repo_root)
+
+    assert resolved.mode is ContractStorageMode.COMPATIBILITY
+    assert resolved.current_path == repo_root / "nightshift/issues"
+    assert resolved.history_path == repo_root / "nightshift/contracts"
+    assert resolved.migration_marker_path == migration_marker
+
+
+def test_resolve_contract_storage_uses_layered_paths_when_marker_declares_layered(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path
+    migration_marker = repo_root / ".nightshift/config/migration.yaml"
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: compatibility
+contract_storage_source: layered
+"""
+    )
+
+    resolved = resolve_contract_storage(repo_root)
+
+    assert resolved.mode is ContractStorageMode.LAYERED
+    assert resolved.current_path == repo_root / ".nightshift/contracts/current"
+    assert resolved.history_path == repo_root / ".nightshift/contracts/history"
+    assert resolved.migration_marker_path == migration_marker
+
+
+def test_resolve_contract_storage_rejects_layered_contract_storage_without_layered_project_config(
+    tmp_path: Path,
+) -> None:
+    migration_marker = tmp_path / ".nightshift/config/migration.yaml"
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: compatibility
+runtime_layout_source: compatibility
+contract_storage_source: layered
+"""
+    )
+
+    with pytest.raises(ValueError, match="contract_storage_source=layered"):
+        resolve_contract_storage(tmp_path)
 
 
 def test_load_project_config_uses_root_config_when_marker_is_absent(tmp_path: Path) -> None:

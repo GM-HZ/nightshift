@@ -27,6 +27,7 @@ def make_contract(
     kind: IssueKind = IssueKind.planning,
     priority: str = "high",
     *,
+    work_order_revision: str | None = None,
     non_goals: tuple[str, ...] = ("Do not change API shape",),
     context_files: tuple[str, ...] = ("docs/spec.md",),
 ) -> IssueContract:
@@ -59,6 +60,20 @@ def make_contract(
         ),
         attempt_limits=AttemptLimitsContract(),
         timeouts=TimeoutsContract(),
+        work_order_revision=work_order_revision,
+    )
+
+
+def _write_layered_migration_marker(repo_root: Path) -> None:
+    migration_marker = repo_root / ".nightshift/config/migration.yaml"
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: compatibility
+contract_storage_source: layered
+"""
     )
 
 
@@ -95,6 +110,33 @@ def test_issue_registry_saves_and_loads_contract(tmp_path: Path) -> None:
 
     assert registry.get_contract("ISSUE-1") == contract
     assert (tmp_path / "nightshift" / "issues" / "ISSUE-1.yaml").is_file()
+
+
+def test_issue_registry_uses_compatibility_contract_storage_paths(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    contract = make_contract("ISSUE-1", work_order_revision="wo-1")
+
+    registry.save_contract(contract)
+
+    assert registry.get_contract("ISSUE-1") == contract
+    assert registry.list_contracts() == [contract]
+    assert registry.list_contract_revisions("ISSUE-1") == [contract]
+    assert (tmp_path / "nightshift" / "issues" / "ISSUE-1.yaml").is_file()
+    assert (tmp_path / "nightshift" / "contracts" / "ISSUE-1" / "0001-wo-1.yaml").is_file()
+
+
+def test_issue_registry_uses_layered_contract_storage_paths(tmp_path: Path) -> None:
+    _write_layered_migration_marker(tmp_path)
+    registry = IssueRegistry(tmp_path)
+    contract = make_contract("ISSUE-1", work_order_revision="wo-1")
+
+    registry.save_contract(contract)
+
+    assert registry.get_contract("ISSUE-1") == contract
+    assert registry.list_contracts() == [contract]
+    assert registry.list_contract_revisions("ISSUE-1") == [contract]
+    assert (tmp_path / ".nightshift" / "contracts" / "current" / "ISSUE-1.yaml").is_file()
+    assert (tmp_path / ".nightshift" / "contracts" / "history" / "ISSUE-1" / "0001-wo-1.yaml").is_file()
 
 
 def test_write_yaml_is_atomicish(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

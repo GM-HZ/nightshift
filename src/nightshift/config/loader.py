@@ -4,7 +4,14 @@ from pathlib import Path
 
 import yaml
 
-from .models import LayoutMode, MigrationMarkerConfig, NightShiftConfig, ResolvedConfigSource
+from .models import (
+    ContractStorageMode,
+    LayoutMode,
+    MigrationMarkerConfig,
+    NightShiftConfig,
+    ResolvedConfigSource,
+    ResolvedContractStorage,
+)
 
 _COMPATIBILITY_CONFIG_PATH = Path("nightshift.yaml")
 _MIGRATION_MARKER_PATH = Path(".nightshift/config/migration.yaml")
@@ -31,12 +38,7 @@ def resolve_project_config_source(repo_root: Path) -> ResolvedConfigSource:
         )
 
     marker = _load_migration_marker(marker_path)
-    if marker.layout_version != 1:
-        raise ValueError(f"unsupported migration layout_version: {marker.layout_version}")
-    if marker.runtime_layout_source not in (None, "compatibility"):
-        raise ValueError(
-            "runtime_layout_source=layered is not supported during Phase 1 layered project config migration"
-        )
+    _validate_migration_marker(marker)
     if marker.project_config_source == "layered":
         return ResolvedConfigSource(
             mode=LayoutMode.LAYERED_PROJECT_CONFIG,
@@ -55,6 +57,34 @@ def resolve_project_config_source(repo_root: Path) -> ResolvedConfigSource:
     )
 
 
+def resolve_contract_storage(repo_root: Path) -> ResolvedContractStorage:
+    marker_path = repo_root / _MIGRATION_MARKER_PATH
+    if not marker_path.exists():
+        return ResolvedContractStorage(
+            mode=ContractStorageMode.COMPATIBILITY,
+            current_path=repo_root / "nightshift/issues",
+            history_path=repo_root / "nightshift/contracts",
+            migration_marker_path=marker_path,
+        )
+
+    marker = _load_migration_marker(marker_path)
+    _validate_migration_marker(marker)
+    if marker.contract_storage_source == "layered":
+        return ResolvedContractStorage(
+            mode=ContractStorageMode.LAYERED,
+            current_path=repo_root / ".nightshift/contracts/current",
+            history_path=repo_root / ".nightshift/contracts/history",
+            migration_marker_path=marker_path,
+        )
+
+    return ResolvedContractStorage(
+        mode=ContractStorageMode.COMPATIBILITY,
+        current_path=repo_root / "nightshift/issues",
+        history_path=repo_root / "nightshift/contracts",
+        migration_marker_path=marker_path,
+    )
+
+
 def load_project_config(repo_root: Path) -> NightShiftConfig:
     resolved_source = resolve_project_config_source(repo_root)
     if resolved_source.mode == LayoutMode.LAYERED_PROJECT_CONFIG and not resolved_source.path.exists():
@@ -69,3 +99,14 @@ def _load_migration_marker(path: Path) -> MigrationMarkerConfig:
     elif not isinstance(data, dict):
         raise ValueError("migration marker root must be a mapping")
     return MigrationMarkerConfig.model_validate(data)
+
+
+def _validate_migration_marker(marker: MigrationMarkerConfig) -> None:
+    if marker.layout_version != 1:
+        raise ValueError(f"unsupported migration layout_version: {marker.layout_version}")
+    if marker.runtime_layout_source not in (None, "compatibility"):
+        raise ValueError(
+            "runtime_layout_source=layered is not supported during Phase 1 layered project config migration"
+        )
+    if marker.contract_storage_source == "layered" and marker.project_config_source != "layered":
+        raise ValueError("contract_storage_source=layered requires project_config_source=layered")
