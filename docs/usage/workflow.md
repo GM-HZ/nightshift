@@ -6,7 +6,7 @@ NightShift still has a broader product direction in the design docs, but this pa
 
 ## Current Flow
 
-`GitHub issue -> issue ingest-github -> approved work order -> queue add -> run --issues|run --all -> recover/report`
+`GitHub issue -> issue ingest-github -> approved work order -> queue add -> run --issues|run --all -> deliver --issues -> recover/report`
 
 ## Step By Step
 
@@ -80,6 +80,24 @@ nightshift run-one NS-123 --repo /path/to/repo --config /path/to/repo/nightshift
 
 Both paths write durable run state, attempts, and artifacts.
 
+### Deliver
+
+NightShift now has a live explicit delivery command:
+
+```bash
+nightshift deliver --issues GH-7 --repo /path/to/repo --config /path/to/repo/nightshift.yaml
+```
+
+This command:
+
+- only accepts already accepted issues
+- requires a frozen accepted delivery snapshot
+- pushes the issue branch
+- opens a draft PR
+- writes delivery linkage back to the current issue record
+
+This is still a conservative first delivery slice. Richer delivery policy, merge automation, and PR update/reopen behavior are still design work.
+
 ### Recover And Report
 
 Recovery and reporting are also live today:
@@ -96,6 +114,7 @@ nightshift report --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 - the live operator surface is still narrower than the broader product design direction
 - queue admission and work-order freeze are live
 - batch execution is live, but still sequential and fail-fast
+- explicit delivery is live, but still conservative
 - reporting is still minimal
 - the `.nightshift` migration is phased and compatibility-first
 
@@ -104,7 +123,6 @@ nightshift report --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 These are still important NightShift product directions, but should currently be read as design work rather than active commands:
 
 - splitter / proposal review CLI
-- delivery / PR dispatcher CLI
 - unattended overnight control loop
 
 ## What To Use For Verification

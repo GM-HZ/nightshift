@@ -40,6 +40,7 @@ The current product-side design work is centered on these documents:
 - `docs/architecture/product/runtime-state-migration.md`
 - `docs/architecture/product/contract-context-field-expansion.md`
 - `docs/architecture/product/documentation-information-architecture.md`
+- `docs/architecture/product/delivery-closure-model.md`
 - `docs/architecture/product/execution-work-order-information-model.md`
 - `docs/architecture/product/execution-work-order-materialization.md`
 
@@ -63,10 +64,10 @@ The main design references for the product workflow side are:
 
 ## Current Next-Step Theme
 
-The current design focus is the cross-cutting cleanup above the now-usable product chain:
+The current design focus is turning the now-usable product chain into a fuller governed loop:
 
+- delivery closure from accepted result to PR
 - execution work order and issue-contract information model
 - config and workspace model
-- product-facing documentation and onboarding
 
 These are the main seams still being tightened so the workflow feels more like a stable product and less like a stitched-together MVP.

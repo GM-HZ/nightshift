@@ -8,7 +8,7 @@ NightShift is an overnight AI coding system for turning a requirement into a rev
 
 - Active target: `v4.2.1`
 - Kernel: implemented and verified
-- Live operator surface: kernel-first plus GitHub issue ingestion bridge, queue admission, work-order materialization, and batch execution via `run --issues` / `run --all`
+- Live operator surface: kernel-first plus GitHub issue ingestion bridge, queue admission, work-order materialization, batch execution via `run --issues` / `run --all`, and explicit delivery via `deliver --issues`
 - Broader product workflow: still primarily a design direction above the current live surface
 - Best current code-aligned summary: [current capability truth matrix](/Users/gongmeng/dev/code/nightshift/docs/architecture/coverage/current-capability-truth-matrix.md)
 
@@ -19,6 +19,7 @@ NightShift is an overnight AI coding system for turning a requirement into a rev
 - queue admission from approved execution work orders
 - queue inspection and reprioritization
 - product-facing batch execution via `run --issues` and `run --all`
+- explicit delivery via `deliver --issues`
 - single-issue execution via `run-one`
 - recovery and minimal historical reporting
 - layered `.nightshift` migration for project config, contract storage, and runtime storage

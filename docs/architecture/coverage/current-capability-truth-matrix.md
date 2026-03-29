@@ -20,6 +20,7 @@ The rule is simple:
 The live CLI currently exposes these commands:
 
 - `issue ingest-github`
+- `deliver --issues`
 - `run --issues`
 - `run --all`
 - `run-one`
@@ -34,12 +35,10 @@ Notes:
 
 - there is no live `split` command
 - there is no live `proposals` command group
-- there is no live `deliver --issues`
-
 Practical consequence:
 
 - the current operator surface is still narrower than the full `v4.2.1` product direction
-- but GitHub issue ingestion bridge and product-facing batch execution are now live
+- but GitHub issue ingestion bridge, product-facing batch execution, and explicit delivery are now live
 
 ---
 
@@ -76,6 +75,8 @@ Only these product-side capabilities are currently present in code:
 - queue-time contract freeze
 - frozen work order provenance on `IssueContract`
 - product-facing batch execution commands
+- accepted delivery snapshot freeze
+- explicit delivery command and PR-create bridge
 - contract context field preservation:
   - `non_goals`
   - `context_files`
@@ -94,7 +95,6 @@ These were previously described in design docs or historical implementation note
 
 - splitter CLI
 - proposal persistence and proposal review CLI
-- delivery / PR dispatcher CLI
 - notification adapters
 - rich report generator
 - unattended overnight daemon loop
@@ -146,7 +146,7 @@ If docs are updated after reading this file, the highest-priority corrections ar
 The current repository state is best described as:
 
 - kernel: live and strong
-- queue admission plus work order materialization: live
-- broader product workflow: mostly design direction, not current live code surface
+- planning bridge, queue admission, batch run, and explicit delivery: live
+- broader product workflow beyond those surfaces: still partly design direction
 
 This is the file to trust first when deciding whether a capability exists now or is still planned.
