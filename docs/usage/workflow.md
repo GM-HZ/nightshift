@@ -6,7 +6,7 @@ NightShift still has a broader product direction in the design docs, but this pa
 
 ## Current Flow
 
-`approved work order -> queue add -> run-one -> recover/report`
+`approved work order -> queue add -> run --issues|run --all -> recover/report`
 
 ## Step By Step
 
@@ -43,17 +43,26 @@ nightshift queue reprioritize NS-123 high --repo /path/to/repo
 
 `queue show` now also surfaces the frozen contract context in lightweight form, including `non_goals_count` and `context_files`.
 
-### Run One
+### Run
 
-NightShift currently exposes single-issue execution through `run-one`.
+NightShift currently exposes product-facing batch execution through `run`.
 
-The live command is:
+The live commands are:
+
+```bash
+nightshift run --issues NS-123,NS-124 --repo /path/to/repo --config /path/to/repo/nightshift.yaml
+nightshift run --all --repo /path/to/repo --config /path/to/repo/nightshift.yaml
+```
+
+`run` executes sequentially and fails fast. It reuses the existing kernel execution path for each selected issue.
+
+`run-one` still exists as the lower-level kernel command for a single issue:
 
 ```bash
 nightshift run-one NS-123 --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 ```
 
-This path is implemented today and writes durable run state, attempts, and artifacts.
+Both paths write durable run state, attempts, and artifacts.
 
 ### Recover And Report
 
@@ -68,8 +77,9 @@ nightshift report --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 
 ## What Is MVP-Shaped Today
 
-- the operator surface is still kernel-first
-- queue admission and work-order freeze are live, but broader planning workflow is still design-forward
+- the live operator surface is still narrower than the broader product design direction
+- queue admission and work-order freeze are live
+- batch execution is live, but still sequential and fail-fast
 - reporting is still minimal
 - the `.nightshift` migration is phased and compatibility-first
 
