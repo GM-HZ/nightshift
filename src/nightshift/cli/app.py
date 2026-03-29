@@ -11,6 +11,10 @@ from nightshift.engines.claude_code_adapter import ClaudeCodeAdapter
 from nightshift.engines.registry import EngineRegistry
 from nightshift.orchestrator import RunOrchestrator
 from nightshift.orchestrator.recovery import RecoveryOrchestrator
+from nightshift.product.execution_selection import (
+    ExecutionSelectionBatchRequest,
+    execute_selection_batch,
+)
 from nightshift.product.queue_admission.service import admit_to_queue
 from nightshift.registry.issue_registry import IssueRegistry
 from nightshift.reporting.minimal_report import build_minimal_report
@@ -122,6 +126,49 @@ def _format_queue_add_error(error: Exception) -> str:
     if message:
         return message.splitlines()[0]
     return error.__class__.__name__
+
+
+def _build_execution_selection_request(
+    issues: str | None,
+    run_all: bool,
+) -> ExecutionSelectionBatchRequest:
+    if run_all and issues:
+        raise typer.BadParameter("--all cannot be combined with --issues")
+    if not run_all and not issues:
+        raise typer.BadParameter("either --issues or --all is required")
+
+    issue_ids = tuple(part.strip() for part in issues.split(",") if part.strip()) if issues else ()
+    return ExecutionSelectionBatchRequest(issue_ids=issue_ids, run_all=run_all)
+
+
+@app.command("run")
+def run(
+    issues: str | None = typer.Option(None, "--issues", help="Comma-separated issue ids to execute in order."),
+    run_all: bool = typer.Option(False, "--all", help="Execute all currently schedulable issues."),
+    repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    config: Path | None = typer.Option(None, "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+) -> None:
+    loaded_config = _load_cli_config(repo, config, require_repo_config=True)
+    repo_root = _resolve_repo_root(repo, loaded_config)
+    issue_registry = build_issue_registry(repo_root)
+    orchestrator = build_run_orchestrator(repo_root, loaded_config)
+
+    try:
+        request = _build_execution_selection_request(issues, run_all)
+    except typer.BadParameter as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(1) from error
+
+    result = execute_selection_batch(orchestrator, issue_registry, request)
+    for outcome in result.outcomes:
+        status = "accepted" if outcome.accepted else "rejected"
+        typer.echo(f"{outcome.issue_id} {status} in {outcome.run_id} ({outcome.attempt_id})")
+
+    typer.echo(
+        f"run: requested={result.summary.requested} "
+        f"completed={result.summary.completed} "
+        f"stopped_early={result.summary.stopped_early}"
+    )
 
 
 @app.command("run-one")
