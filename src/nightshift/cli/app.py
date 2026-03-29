@@ -15,6 +15,16 @@ from nightshift.product.execution_selection import (
     ExecutionSelectionBatchRequest,
     execute_selection_batch,
 )
+from nightshift.product.issue_ingestion_bridge.github_client import (
+    GitHubIssueClient,
+    GitHubIssueClientError,
+    resolve_github_token,
+)
+from nightshift.product.issue_ingestion_bridge.service import (
+    IssueIngestionBridgeError,
+    bridge_github_issue_to_work_order,
+    write_bridge_draft_to_work_order,
+)
 from nightshift.product.queue_admission.service import admit_to_queue
 from nightshift.registry.issue_registry import IssueRegistry
 from nightshift.reporting.minimal_report import build_minimal_report
@@ -24,7 +34,9 @@ from nightshift.workspace.manager import WorkspaceManager
 
 app = typer.Typer(help="NightShift kernel CLI.")
 queue_app = typer.Typer(help="Inspect and mutate the current issue queue.")
+issue_app = typer.Typer(help="Bridge planning-side GitHub issues into execution work orders.")
 app.add_typer(queue_app, name="queue")
+app.add_typer(issue_app, name="issue")
 
 
 @app.callback(invoke_without_command=True)
@@ -141,6 +153,13 @@ def _build_execution_selection_request(
     return ExecutionSelectionBatchRequest(issue_ids=issue_ids, run_all=run_all)
 
 
+def _default_issue_author_allowlist(repo_full_name: str) -> tuple[str, ...]:
+    owner = repo_full_name.split("/", 1)[0].strip()
+    if owner:
+        return (owner,)
+    return ()
+
+
 @app.command("run")
 def run(
     issues: str | None = typer.Option(None, "--issues", help="Comma-separated issue ids to execute in order."),
@@ -214,6 +233,41 @@ def report(
     report_model = build_minimal_report(state_store, run)
     _write_report_output(report_model, loaded_config)
     typer.echo(report_model.model_dump_json(indent=2, exclude_none=True))
+
+
+@issue_app.command("ingest-github")
+def issue_ingest_github(
+    repo_full_name: str = typer.Option(..., "--repo-full-name"),
+    issue: int = typer.Option(..., "--issue", min=1),
+    repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    config: Path | None = typer.Option(None, "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+    update_existing: bool = typer.Option(False, "--update-existing"),
+) -> None:
+    loaded_config = _load_cli_config(repo, config, require_repo_config=True)
+    repo_root = _resolve_repo_root(repo, loaded_config)
+
+    try:
+        token = resolve_github_token()
+        payload = GitHubIssueClient(token=token).fetch_issue(repo_full_name, issue)
+        draft = bridge_github_issue_to_work_order(
+            payload,
+            config=loaded_config,
+            author_allowlist=_default_issue_author_allowlist(repo_full_name),
+        )
+        result = write_bridge_draft_to_work_order(
+            repo_root=repo_root,
+            payload=payload,
+            draft=draft,
+            update_existing=update_existing,
+        )
+    except (GitHubIssueClientError, IssueIngestionBridgeError, ValueError) as error:
+        typer.echo(f"issue ingest-github failed: {error}", err=True)
+        raise typer.Exit(1) from error
+
+    action = "updated" if result.summary.updated_existing else "created"
+    typer.echo(
+        f"issue ingest-github: {action} {result.summary.work_order_id} from {result.summary.repo_full_name}#{result.summary.issue_number}"
+    )
 
 
 @queue_app.command("status")

@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import pytest
 
 from nightshift.config.loader import load_config
+from nightshift.product.issue_ingestion_bridge.github_client import (
+    GitHubIssueClient,
+    GitHubIssueClientError,
+    resolve_github_token,
+)
 from nightshift.product.issue_ingestion_bridge.models import (
     GitHubIssueBridgeDraft,
     GitHubIssueBridgeResult,
@@ -345,3 +351,66 @@ def test_bridge_service_allows_explicit_update_existing(tmp_path: Path) -> None:
 
     assert result.summary.updated_existing is True
     assert parse_work_order_markdown(existing_path.read_text()).frontmatter.work_order_id == "WO-GH-7"
+
+
+def test_resolve_github_token_prefers_nightshift_specific_variable(monkeypatch) -> None:
+    monkeypatch.setenv("NIGHTSHIFT_GITHUB_TOKEN", "nightshift-token")
+    monkeypatch.setenv("GITHUB_TOKEN", "generic-token")
+
+    token = resolve_github_token()
+
+    assert token == "nightshift-token"
+
+
+def test_resolve_github_token_rejects_missing_token(monkeypatch) -> None:
+    monkeypatch.delenv("NIGHTSHIFT_GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    with pytest.raises(GitHubIssueClientError, match="missing GitHub token"):
+        resolve_github_token()
+
+
+def test_github_issue_client_fetches_and_normalizes_payload(monkeypatch) -> None:
+    payload = {
+        "title": "Add Chinese README",
+        "body": "NightShift-Issue: true",
+        "labels": [{"name": "nightshift"}, {"name": "docs"}],
+        "user": {"login": "GM-HZ"},
+        "html_url": "https://github.com/GM-HZ/nightshift/issues/7",
+    }
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(payload).encode("utf-8")
+
+    def fake_urlopen(request):
+        assert request.full_url == "https://api.github.com/repos/GM-HZ/nightshift/issues/7"
+        assert request.headers["Authorization"] == "Bearer test-token"
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    client = GitHubIssueClient(token="test-token")
+    issue = client.fetch_issue("GM-HZ/nightshift", 7)
+
+    assert issue.repo_full_name == "GM-HZ/nightshift"
+    assert issue.issue_number == 7
+    assert issue.labels == ("nightshift", "docs")
+    assert issue.author_login == "GM-HZ"
+
+
+def test_github_issue_client_surfaces_fetch_failure_cleanly(monkeypatch) -> None:
+    def fake_urlopen(request):
+        raise OSError("network down")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    client = GitHubIssueClient(token="test-token")
+    with pytest.raises(GitHubIssueClientError, match="failed to fetch GitHub issue"):
+        client.fetch_issue("GM-HZ/nightshift", 7)
