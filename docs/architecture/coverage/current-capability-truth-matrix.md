@@ -124,7 +124,10 @@ What this means in practice:
 
 - the repository is already moving toward the `.nightshift/` model
 - but the migration is still phased and compatibility-first
-- user-space `~/.nightshift/` adoption is still a design direction, not a completed implementation
+- first live user-space support now exists for:
+  - `~/.nightshift/config/user.yaml`
+  - `~/.nightshift/auth/github.yaml`
+- broader `~/.nightshift/` adoption is still phased, not complete
 
 ---
 

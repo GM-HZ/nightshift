@@ -23,6 +23,7 @@ NightShift is an overnight AI coding system for turning a requirement into a rev
 - single-issue execution via `run-one`
 - recovery and minimal historical reporting
 - layered `.nightshift` migration for project config, contract storage, and runtime storage
+- first live `~/.nightshift/` user-space config and GitHub auth fallback
 
 ## Quickstart Path
 

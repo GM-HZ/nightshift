@@ -68,8 +68,10 @@ What “done” means:
 Current gap:
 
 - project-side `.nightshift` migration has started
-- user-side `~/.nightshift/` is still not live
-- structured auth/token/profile configuration is not implemented
+- a first user-side `~/.nightshift/` layer is now live for:
+  - `config/user.yaml`
+  - `auth/github.yaml`
+- broader user-space config/auth/profile structure is still not complete
 
 Why it matters:
 

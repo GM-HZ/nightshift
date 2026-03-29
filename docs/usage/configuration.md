@@ -99,6 +99,36 @@ In the current implementation, `queue add` is also the freeze point for Work Ord
 
 If the Work Order changes later, a new `queue add` is required so NightShift can freeze a new contract revision.
 
+## User-Space Operator Environment
+
+NightShift now has a first live user-space layer under:
+
+- `~/.nightshift/`
+- or `NIGHTSHIFT_HOME` when explicitly set
+
+The first live user-space files are:
+
+- `~/.nightshift/config/user.yaml`
+- `~/.nightshift/auth/github.yaml`
+
+Current first-phase behavior:
+
+- `issue ingest-github` can use `github.default_repo_full_name` from `user.yaml`
+- GitHub-backed commands can resolve auth from `auth/github.yaml` when environment variables are absent
+
+Current precedence remains:
+
+1. CLI flags
+2. project config
+3. user-space config/auth
+4. built-in defaults
+
+Environment variables still win over user-space GitHub auth:
+
+1. `NIGHTSHIFT_GITHUB_TOKEN`
+2. `GITHUB_TOKEN`
+3. `~/.nightshift/auth/github.yaml`
+
 ## Target Direction
 
 The broader long-term model is still split into:
@@ -106,7 +136,7 @@ The broader long-term model is still split into:
 - user space: `~/.nightshift/`
 - project space: `<repo>/.nightshift/`
 
-That broader target model is still a design direction in the docs. Do not treat it as the current on-disk layout unless the specific repository has already migrated.
+That broader target model is now partially live for user-space config/auth and partially live for migrated project layouts. Do not treat the entire target tree as fully implemented yet.
 
 For migrated repositories, the runtime portion of the project layout lives under `.nightshift/` after the repository has entered layered project config and then opted into Phase 3 runtime migration.
 

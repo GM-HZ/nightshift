@@ -43,6 +43,7 @@ The current product-side design work is centered on these documents:
 - `docs/architecture/product/delivery-closure-model.md`
 - `docs/architecture/product/execution-work-order-information-model.md`
 - `docs/architecture/product/execution-work-order-materialization.md`
+- `docs/architecture/product/user-space-operator-environment.md`
 
 ## Important Boundary
 
