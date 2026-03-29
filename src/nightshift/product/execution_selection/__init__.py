@@ -1,13 +1,15 @@
 from .models import (
-    ExecutionSelectionItemResult,
-    ExecutionSelectionRequest,
-    ExecutionSelectionResult,
-    ExecutionSelectionSummary,
+    ExecutionSelectionBatchRequest,
+    ExecutionSelectionBatchResult,
+    ExecutionSelectionBatchSummary,
+    ExecutionSelectionOutcome,
 )
+from .service import execute_selection_batch
 
 __all__ = [
-    "ExecutionSelectionItemResult",
-    "ExecutionSelectionRequest",
-    "ExecutionSelectionResult",
-    "ExecutionSelectionSummary",
+    "ExecutionSelectionBatchRequest",
+    "ExecutionSelectionBatchResult",
+    "ExecutionSelectionBatchSummary",
+    "ExecutionSelectionOutcome",
+    "execute_selection_batch",
 ]
