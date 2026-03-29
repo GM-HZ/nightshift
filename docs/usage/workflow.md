@@ -6,15 +6,31 @@ NightShift still has a broader product direction in the design docs, but this pa
 
 ## Current Flow
 
-`approved work order -> queue add -> run --issues|run --all -> recover/report`
+`GitHub issue -> issue ingest-github -> approved work order -> queue add -> run --issues|run --all -> recover/report`
 
 ## Step By Step
 
-### Requirement
+### Planning Entry
 
-A human starts with a change request and turns it into an approved execution work order on the active branch.
+NightShift now has a live GitHub-based planning bridge:
 
-The broader `requirement -> proposal -> issue -> delivery` chain still exists in design and historical rehearsal evidence, but it is not the current live CLI surface.
+```bash
+nightshift issue ingest-github \
+  --repo-full-name GM-HZ/nightshift \
+  --issue 42 \
+  --repo /path/to/repo \
+  --config /path/to/repo/nightshift.yaml
+```
+
+This command:
+
+- fetches a compliant GitHub issue
+- validates provenance and template expectations
+- bridges it into `.nightshift/work-orders/WO-GH-<n>.md`
+
+It does **not** freeze a contract by itself. The resulting work order still flows through `queue add`.
+
+The broader `requirement -> proposal -> issue -> delivery` chain still exists in design and historical rehearsal evidence, but only the GitHub issue bridge is live in the current CLI surface.
 
 ### Queue Add
 
@@ -88,7 +104,6 @@ nightshift report --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 These are still important NightShift product directions, but should currently be read as design work rather than active commands:
 
 - splitter / proposal review CLI
-- GitHub issue ingestion CLI
 - delivery / PR dispatcher CLI
 - unattended overnight control loop
 

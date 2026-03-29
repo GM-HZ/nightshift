@@ -8,13 +8,14 @@ NightShift is an overnight AI coding system for turning a requirement into a rev
 
 - Active target: `v4.2.1`
 - Kernel: implemented and verified
-- Live operator surface: kernel-first plus queue admission, work-order materialization, and batch execution via `run --issues` / `run --all`
+- Live operator surface: kernel-first plus GitHub issue ingestion bridge, queue admission, work-order materialization, and batch execution via `run --issues` / `run --all`
 - Broader product workflow: still primarily a design direction above the current live surface
 - Best current code-aligned summary: [current capability truth matrix](/Users/gongmeng/dev/code/nightshift/docs/architecture/coverage/current-capability-truth-matrix.md)
 
 ## What Works Today
 
 - immutable contracts and mutable current issue records
+- GitHub issue ingestion into repository-local execution work orders
 - queue admission from approved execution work orders
 - queue inspection and reprioritization
 - product-facing batch execution via `run --issues` and `run --all`

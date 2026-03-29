@@ -19,6 +19,9 @@ The rule is simple:
 
 The live CLI currently exposes these commands:
 
+- `issue ingest-github`
+- `run --issues`
+- `run --all`
 - `run-one`
 - `recover`
 - `report`
@@ -31,14 +34,12 @@ Notes:
 
 - there is no live `split` command
 - there is no live `proposals` command group
-- there is no live `issue ingest-github` command
-- there is no live `run --issues` or `run --all`
 - there is no live `deliver --issues`
 
 Practical consequence:
 
-- the current operator surface is still kernel-first plus queue admission
-- product workflow beyond queue admission is not currently exposed as a live CLI in this repository state
+- the current operator surface is still narrower than the full `v4.2.1` product direction
+- but GitHub issue ingestion bridge and product-facing batch execution are now live
 
 ---
 
@@ -68,11 +69,13 @@ This remains the strongest and most complete part of the repository.
 
 Only these product-side capabilities are currently present in code:
 
+- GitHub issue ingestion bridge
 - queue admission service
 - execution work order parser
 - execution work order materialization
 - queue-time contract freeze
 - frozen work order provenance on `IssueContract`
+- product-facing batch execution commands
 - contract context field preservation:
   - `non_goals`
   - `context_files`
@@ -91,8 +94,6 @@ These were previously described in design docs or historical implementation note
 
 - splitter CLI
 - proposal persistence and proposal review CLI
-- GitHub issue ingestion CLI
-- product-level batch execution commands such as `run --issues` and `run --all`
 - delivery / PR dispatcher CLI
 - notification adapters
 - rich report generator
