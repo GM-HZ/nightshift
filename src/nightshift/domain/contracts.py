@@ -107,6 +107,8 @@ class IssueContract(BaseModel):
     goal: NonEmptyStr
     allowed_paths: tuple[NonEmptyStr, ...]
     forbidden_paths: tuple[NonEmptyStr, ...]
+    non_goals: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
+    context_files: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     verification: VerificationContract
     test_edit_policy: TestEditPolicyContract
     attempt_limits: AttemptLimitsContract

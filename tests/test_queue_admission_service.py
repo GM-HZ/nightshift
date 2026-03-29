@@ -158,6 +158,8 @@ def test_admit_to_queue_freezes_current_work_order_and_persists_revisioned_contr
     assert contract.work_order_id == "WO-20260329-001"
     assert contract.work_order_path == ".nightshift/work-orders/WO-20260329-001.md"
     assert contract.work_order_revision is not None
+    assert contract.non_goals == ("Change packaging",)
+    assert contract.context_files == ("README.md",)
     assert record.issue_state == IssueState.ready
     assert record.queue_priority == "medium"
     revisions = registry.list_contract_revisions("WO-20260329-001")

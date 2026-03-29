@@ -22,7 +22,14 @@ from nightshift.registry.issue_registry import IssueRegistry
 from nightshift.store.filesystem import write_yaml
 
 
-def make_contract(issue_id: str, kind: IssueKind = IssueKind.planning, priority: str = "high") -> IssueContract:
+def make_contract(
+    issue_id: str,
+    kind: IssueKind = IssueKind.planning,
+    priority: str = "high",
+    *,
+    non_goals: tuple[str, ...] = ("Do not change API shape",),
+    context_files: tuple[str, ...] = ("docs/spec.md",),
+) -> IssueContract:
     verification = VerificationContract()
     if kind == IssueKind.execution:
         verification = VerificationContract(
@@ -41,6 +48,8 @@ def make_contract(issue_id: str, kind: IssueKind = IssueKind.planning, priority:
         goal="Ship the thing",
         allowed_paths=("src",),
         forbidden_paths=("secrets",),
+        non_goals=non_goals,
+        context_files=context_files,
         verification=verification,
         test_edit_policy=TestEditPolicyContract(
             can_add_tests=True,
@@ -299,7 +308,14 @@ def test_queue_status_lists_current_records(tmp_path: Path) -> None:
 
 def test_queue_show_displays_contract_and_record_state(tmp_path: Path) -> None:
     registry = IssueRegistry(tmp_path)
-    registry.save_contract(make_contract("ISSUE-1", priority="medium"))
+    registry.save_contract(
+        make_contract(
+            "ISSUE-1",
+            priority="medium",
+            non_goals=("Do not change API shape", "Do not add new endpoints"),
+            context_files=("docs/spec.md", "src/module.py"),
+        )
+    )
     registry.save_record(
         make_record(
             "ISSUE-1",
@@ -319,6 +335,8 @@ def test_queue_show_displays_contract_and_record_state(tmp_path: Path) -> None:
     assert "issue_state=running" in result.stdout
     assert "attempt_state=executing" in result.stdout
     assert "delivery_state=none" in result.stdout
+    assert "non_goals_count=2" in result.stdout
+    assert "context_files=docs/spec.md,src/module.py" in result.stdout
 
 
 def test_queue_reprioritize_updates_only_current_issue_record(tmp_path: Path) -> None:

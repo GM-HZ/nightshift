@@ -161,6 +161,8 @@ def test_queue_add_reports_frozen_contract_and_admission(tmp_path: Path) -> None
     contract = registry.get_contract("WO-20260329-001")
     record = registry.get_record("WO-20260329-001")
     assert contract.work_order_revision is not None
+    assert contract.non_goals == ("Change packaging",)
+    assert contract.context_files == ("README.md",)
     assert record.issue_state == IssueState.ready
 
 

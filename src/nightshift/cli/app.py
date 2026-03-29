@@ -176,13 +176,16 @@ def queue_show(
     issue_registry = build_issue_registry(repo)
     contract = issue_registry.get_contract(issue_id)
     record = issue_registry.get_record(issue_id)
+    context_files = ",".join(contract.context_files)
     typer.echo(
         f"issue_id={record.issue_id} "
         f"priority={contract.priority} "
         f"queue_priority={record.queue_priority} "
         f"issue_state={record.issue_state} "
         f"attempt_state={record.attempt_state} "
-        f"delivery_state={record.delivery_state}"
+        f"delivery_state={record.delivery_state} "
+        f"non_goals_count={len(contract.non_goals)} "
+        f"context_files={context_files}"
     )
 
 

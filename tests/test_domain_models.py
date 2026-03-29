@@ -25,6 +25,8 @@ def test_issue_contract_rejects_runtime_fields() -> None:
         "goal": "Ship the feature",
         "allowed_paths": ["src"],
         "forbidden_paths": ["secrets"],
+        "non_goals": ["Do not change API shape"],
+        "context_files": ["docs/spec.md"],
         "verification": {
             "issue_validation": {
                 "required": True,
@@ -70,6 +72,8 @@ def test_issue_contract_is_frozen_after_creation() -> None:
         goal="Ship the feature",
         allowed_paths=["src"],
         forbidden_paths=["secrets"],
+        non_goals=("Do not change API shape",),
+        context_files=("docs/spec.md",),
         verification=VerificationContract(
             issue_validation=VerificationStageContract(
                 required=True,
@@ -114,6 +118,8 @@ def test_issue_record_from_contract_seeds_queue_priority() -> None:
         goal="Ship the feature",
         allowed_paths=["src"],
         forbidden_paths=["secrets"],
+        non_goals=("Do not change API shape",),
+        context_files=("docs/spec.md",),
         verification=VerificationContract(),
         engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
         test_edit_policy=TestEditPolicyContract(
@@ -147,6 +153,8 @@ def test_issue_record_from_contract_rejects_contract_field_overrides() -> None:
         goal="Ship the feature",
         allowed_paths=["src"],
         forbidden_paths=["secrets"],
+        non_goals=("Do not change API shape",),
+        context_files=("docs/spec.md",),
         verification=VerificationContract(),
         engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
         test_edit_policy=TestEditPolicyContract(
@@ -182,6 +190,8 @@ def test_issue_contract_rejects_unknown_kind() -> None:
             goal="Do the task",
             allowed_paths=["src"],
             forbidden_paths=["secrets"],
+            non_goals=("Do not change API shape",),
+            context_files=("docs/spec.md",),
             verification=VerificationContract(),
             engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
             test_edit_policy=TestEditPolicyContract(
@@ -205,6 +215,8 @@ def test_issue_contract_rejects_blank_identity_and_scope_values() -> None:
             goal="Ship the feature",
             allowed_paths=["src", "   "],
             forbidden_paths=["secrets"],
+            non_goals=("Do not change API shape",),
+            context_files=("docs/spec.md",),
             verification=VerificationContract(),
             engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
             test_edit_policy=TestEditPolicyContract(
@@ -227,6 +239,8 @@ def test_execution_contract_requires_paths_and_validation() -> None:
         goal="Do the execution task",
         allowed_paths=["src"],
         forbidden_paths=["secrets"],
+        non_goals=("Do not change API shape",),
+        context_files=("docs/spec.md",),
         verification=VerificationContract(
             issue_validation=VerificationStageContract(
                 required=True,
@@ -258,6 +272,8 @@ def test_execution_contract_rejects_commands_without_pass_condition() -> None:
             goal="Do the execution task",
             allowed_paths=["src"],
             forbidden_paths=["secrets"],
+            non_goals=("Do not change API shape",),
+            context_files=("docs/spec.md",),
             verification=VerificationContract(
                 issue_validation=VerificationStageContract(
                     required=True,
@@ -292,6 +308,8 @@ def test_execution_contract_rejects_unknown_pass_condition_type() -> None:
             goal="Do the execution task",
             allowed_paths=["src"],
             forbidden_paths=["secrets"],
+            non_goals=("Do not change API shape",),
+            context_files=("docs/spec.md",),
             verification=VerificationContract(
                 issue_validation=VerificationStageContract(
                     required=True,
@@ -321,6 +339,8 @@ def test_execution_contract_rejects_malformed_secondary_stage() -> None:
             goal="Do the execution task",
             allowed_paths=["src"],
             forbidden_paths=["secrets"],
+            non_goals=("Do not change API shape",),
+            context_files=("docs/spec.md",),
             verification=VerificationContract(
                 issue_validation=VerificationStageContract(
                     required=True,
@@ -354,6 +374,8 @@ def test_execution_contract_accepts_optional_concrete_verification() -> None:
         goal="Do the execution task",
         allowed_paths=["src"],
         forbidden_paths=["secrets"],
+        non_goals=("Do not change API shape",),
+        context_files=("docs/spec.md",),
         verification=VerificationContract(
             issue_validation=VerificationStageContract(
                 required=False,
@@ -412,6 +434,8 @@ def test_execution_contract_rejects_empty_allowed_paths() -> None:
             goal="Do the execution task",
             allowed_paths=[],
             forbidden_paths=["secrets"],
+            non_goals=("Do not change API shape",),
+            context_files=("docs/spec.md",),
             verification=VerificationContract(
                 issue_validation=VerificationStageContract(
                     required=True,
@@ -441,6 +465,8 @@ def test_execution_contract_rejects_empty_verification() -> None:
             goal="Do the execution task",
             allowed_paths=["src"],
             forbidden_paths=["secrets"],
+            non_goals=("Do not change API shape",),
+            context_files=("docs/spec.md",),
             verification=VerificationContract(),
             engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback=None),
             test_edit_policy=TestEditPolicyContract(
@@ -469,6 +495,93 @@ def test_attempt_record_requires_validation_pass_for_accepted() -> None:
         )
 
     assert "accepted attempts require a passing validation_result" in str(exc_info.value)
+
+
+def test_issue_contract_accepts_non_goals_and_context_files() -> None:
+    contract = IssueContract(
+        issue_id="ISSUE-1",
+        title="Implement feature",
+        kind="planning",
+        priority="high",
+        goal="Ship the feature",
+        allowed_paths=["src"],
+        forbidden_paths=["secrets"],
+        non_goals=("Do not change API shape", "Do not add new endpoints"),
+        context_files=("docs/spec.md", "src/module.py"),
+        verification=VerificationContract(),
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
+        test_edit_policy=TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        attempt_limits=AttemptLimitsContract(),
+        timeouts=TimeoutsContract(),
+    )
+
+    assert contract.non_goals == ("Do not change API shape", "Do not add new endpoints")
+    assert contract.context_files == ("docs/spec.md", "src/module.py")
+
+
+def test_issue_contract_defaults_non_goals_and_context_files() -> None:
+    contract = IssueContract(
+        issue_id="ISSUE-1",
+        title="Implement feature",
+        kind="planning",
+        priority="high",
+        goal="Ship the feature",
+        allowed_paths=["src"],
+        forbidden_paths=["secrets"],
+        verification=VerificationContract(),
+        engine_preferences=EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
+        test_edit_policy=TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        attempt_limits=AttemptLimitsContract(),
+        timeouts=TimeoutsContract(),
+    )
+
+    assert contract.non_goals == ()
+    assert contract.context_files == ()
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    (
+        ("non_goals", ("",)),
+        ("context_files", (" ",)),
+    ),
+)
+def test_issue_contract_rejects_blank_context_field_items(field_name: str, field_value: tuple[str, ...]) -> None:
+    kwargs = {
+        "issue_id": "ISSUE-1",
+        "title": "Implement feature",
+        "kind": "planning",
+        "priority": "high",
+        "goal": "Ship the feature",
+        "allowed_paths": ["src"],
+        "forbidden_paths": ["secrets"],
+        "non_goals": ("Do not change API shape",),
+        "context_files": ("docs/spec.md",),
+        "verification": VerificationContract(),
+        "engine_preferences": EnginePreferencesContract(primary="gpt-5", fallback="gpt-4.1"),
+        "test_edit_policy": TestEditPolicyContract(
+            can_add_tests=True,
+            can_modify_existing_tests=True,
+            can_weaken_assertions=False,
+            requires_test_change_reason=True,
+        ),
+        "attempt_limits": AttemptLimitsContract(),
+        "timeouts": TimeoutsContract(),
+    }
+    kwargs[field_name] = field_value
+
+    with pytest.raises(ValidationError):
+        IssueContract(**kwargs)
 
 
 def test_attempt_record_uses_canonical_validation_passed_field() -> None:

@@ -57,6 +57,8 @@ def materialize_work_order(
         goal=execution.goal,
         allowed_paths=tuple(execution.allowed_paths),
         forbidden_paths=tuple(execution.forbidden_paths or issue_defaults.default_forbidden_paths),
+        non_goals=tuple(execution.non_goals),
+        context_files=tuple(execution.context_files),
         verification=verification,
         test_edit_policy=_materialize_test_edit_policy(execution, config),
         attempt_limits=_materialize_attempt_limits(execution, config),

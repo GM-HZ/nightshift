@@ -35,6 +35,7 @@ That grouping may still be refined as implementation work exposes better seams.
 The current product-side design work is centered on these documents:
 
 - `docs/architecture/product/config-and-workspace-model.md`
+- `docs/architecture/product/contract-context-field-expansion.md`
 - `docs/architecture/product/documentation-information-architecture.md`
 - `docs/architecture/product/execution-work-order-information-model.md`
 - `docs/architecture/product/execution-work-order-materialization.md`

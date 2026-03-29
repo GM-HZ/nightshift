@@ -50,6 +50,7 @@ At `queue add` time, NightShift:
 - reads the current approved Work Order
 - materializes an immutable `IssueContract`
 - records the frozen work order revision
+- freezes approved execution context including `non_goals` and `context_files`
 - admits the issue into the runnable queue only if that materialization succeeds
 
 If the Work Order changes after that, the issue must go through `queue add` again before `run` should be trusted to use the newer semantics.
@@ -62,6 +63,8 @@ nightshift queue status --repo /path/to/repo
 nightshift queue show NS-123 --repo /path/to/repo
 nightshift queue reprioritize NS-123 high --repo /path/to/repo
 ```
+
+`queue show` now also surfaces the frozen contract context in lightweight form, including `non_goals_count` and `context_files`.
 
 ### Run
 

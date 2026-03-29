@@ -134,6 +134,8 @@ def test_materialize_work_order_fills_defaults_and_normalizes_verification_comma
     assert contract.work_order_id == "WO-20260329-001"
     assert contract.priority == "high"
     assert contract.forbidden_paths == ("secrets", "dist")
+    assert contract.non_goals == ("Change packaging", "Rewrite unrelated docs")
+    assert contract.context_files == ("README.md",)
     assert contract.acceptance == (
         "README.zh-CN.md exists and is non-empty",
         "README.md links to README.zh-CN.md",
@@ -160,6 +162,40 @@ def test_materialize_work_order_fills_defaults_and_normalizes_verification_comma
     assert contract.source_issue.repo == "GM-HZ/nightshift"
     assert contract.source_branch == "feature/wo-20260329-001"
     assert contract.source_pr == "17"
+
+
+def test_materialize_work_order_projects_context_fields_from_execution_only() -> None:
+    from nightshift.product.work_orders.materialize import (
+        WorkOrderMaterializationProvenance,
+        materialize_work_order,
+    )
+
+    parsed = make_parsed_work_order()
+    parsed = ParsedWorkOrder(
+        frontmatter=parsed.frontmatter.model_copy(
+            update={
+                "execution": parsed.frontmatter.execution.model_copy(
+                    update={
+                        "non_goals": ("Do not touch docs packaging",),
+                        "context_files": ("docs/reference.md", "README.md"),
+                    }
+                )
+            }
+        ),
+        body=parsed.body,
+    )
+
+    contract = materialize_work_order(
+        parsed,
+        make_config(),
+        WorkOrderMaterializationProvenance(
+            work_order_path=".nightshift/work-orders/WO-20260329-001.md",
+            work_order_revision="abc123def456",
+        ),
+    )
+
+    assert contract.non_goals == ("Do not touch docs packaging",)
+    assert contract.context_files == ("docs/reference.md", "README.md")
 
 
 def test_materialize_work_order_preserves_structured_verification_and_explicit_issue_id() -> None:
