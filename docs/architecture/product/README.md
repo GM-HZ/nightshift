@@ -1,18 +1,17 @@
 # NightShift Product Workflow
 
-This section describes the parts of NightShift that sit above the kernel and are not yet complete in the current repository.
+This section is the product-design entry point above the kernel.
+It describes the product-side models and boundaries, not the operator guide.
 
-It should be read as the current product-layer planning boundary, not as a final code-layout commitment.
+If you want to use NightShift, start with [../../usage/README.md](../../usage/README.md).
 
 ## Product Workflow Status
 
-The broader product workflow is not yet fully implemented.
+The broader product chain is usable today in MVP form.
 
-The kernel can already execute approved work once an execution-ready issue exists.
+The kernel can execute approved work once an execution-ready issue exists, and the surrounding flow now covers issue intake, queue admission, execution selection, and delivery with simplifications that are called out in the coverage matrix.
 
-What is still missing is the workflow around getting work into the kernel and delivering the result back out.
-
-This is the area where the architecture is still expected to evolve the most.
+The remaining design work is about tightening the product-side models and reducing the manual seams around that chain.
 
 ## What Belongs To Product Workflow
 
@@ -31,19 +30,26 @@ These items are grouped here as the current product-work boundary for planning p
 
 That grouping may still be refined as implementation work exposes better seams.
 
+## Current Product Design Docs
+
+The current product-side design work is centered on these documents:
+
+- `docs/architecture/product/config-and-workspace-model.md`
+- `docs/architecture/product/documentation-information-architecture.md`
+- `docs/architecture/product/execution-work-order-information-model.md`
+- `docs/architecture/product/splitter-proposal-review-mvp.md`
+- `docs/architecture/product/issue-ingestion-mvp.md`
+- `docs/architecture/product/queue-admission-mvp.md`
+- `docs/architecture/product/execution-selection-mvp.md`
+- `docs/architecture/product/delivery-pr-dispatcher-mvp.md`
+
 ## Important Boundary
 
-Today the repository supports:
+Today the repository supports a usable chain from requirement and issue intake through kernel execution and delivery, but several steps are still MVP-shaped:
 
-- execution-ready issue in
-- kernel execution
-- run history out
-
-It does not yet support the full product chain:
-
-- external request in
-- automated proposal and approval
-- automated delivery and PR creation
+- splitter and proposal review are intentionally thin
+- issue ingestion and queue admission are simpler than the target product model
+- delivery works, but it is not a full release-management system
 
 ## Design Sources
 
@@ -55,9 +61,10 @@ The main design references for the product workflow side are:
 
 ## Current Next-Step Theme
 
-The next meaningful step above the kernel is a minimal issue-ingestion path that can turn an external request into:
+The current design focus is the cross-cutting cleanup above the now-usable product chain:
 
-- immutable `IssueContract`
-- current `IssueRecord`
+- execution work order and issue-contract information model
+- config and workspace model
+- product-facing documentation and onboarding
 
-without requiring manual hand-authoring of both files every time.
+These are the main seams still being tightened so the workflow feels more like a stable product and less like a stitched-together MVP.

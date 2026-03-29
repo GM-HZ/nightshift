@@ -1,6 +1,7 @@
 # NightShift Local Development
 
-This note documents the safest way to run NightShift locally when multiple worktrees or editable installs exist on the same machine.
+This note is for contributors working on NightShift itself.
+It covers the safest way to run tests and CLI commands locally when multiple worktrees or editable installs exist on the same machine.
 
 ## Why This Matters
 

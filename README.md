@@ -1,78 +1,40 @@
 # NightShift
 
-NightShift is an overnight AI coding harness. This repository now contains both the `v4.2.1` architecture spec set and a Python MVP kernel that can execute a single issue, validate it, recover interrupted runs, and emit a minimal historical report.
+NightShift is an overnight AI coding system for turning a requirement into a reviewable change, running it through an engine, and keeping a durable record of what happened. This repository is organized around the `v4.2.1` product direction.
 
 ## Current Status
 
-- Current implementation target: `v4.2.1`
-- Current CLI surface: `run-one`, `recover`, `report`, `queue status`, `queue show`, `queue reprioritize`
-- Current engine adapters: `codex`, `claude`
-- Current scope: single-issue execution flow plus persistence, validation, recovery, and run-scoped reporting
+- Active target: `v4.2.1`
+- Kernel: implemented and verified
+- Product workflow: usable today, with some MVP-shaped simplifications still visible in the docs and operator flow
+- Best current proof: [workflow verification report](/Users/gongmeng/dev/code/nightshift/docs/2026-03-28-workflow-verification-report.md) and [rehearsal archive](/Users/gongmeng/dev/code/nightshift/docs/rehearsals/2026-03-29-gh7-product-e2e/README.md)
 
-## Repository Map
+## What Works Today
 
-- `src/nightshift/`: Python MVP kernel implementation
-- `tests/`: executable behavior and regression coverage
-- `examples/`: reference config and issue contract shapes
-- `docs/superpowers/specs/`: architecture history and current spec set
-- `docs/mvp-walkthrough.md`: implementation-facing usage notes for the current MVP
-- `docs/2026-03-28-workflow-verification-report.md`: real operator rehearsal results and confirmed workflow gaps
-- `docs/local-development.md`: safe local execution guidance for multi-worktree development
-- `docs/architecture/README.md`: current architecture entry point, split into kernel and product workflow views
+- requirement splitting and proposal review
+- GitHub issue ingestion into execution-ready contracts and records
+- queue admission and queue inspection
+- single-issue execution, recovery, and reporting
+- delivery flow through to pull request creation in the current product chain
 
-## Current Recommended Entry Points
+## Quickstart Path
 
-- Specs index: `docs/superpowers/specs/README.md`
-- Current architecture: `docs/superpowers/specs/2026-03-27-nightshift-v4.2.1-unified-spec.md`
-- Current detailed design pack: `docs/superpowers/specs/nightshift-v4.2.1/README.md`
-- MVP walkthrough: `docs/mvp-walkthrough.md`
-- Latest workflow verification: `docs/2026-03-28-workflow-verification-report.md`
-- Local development note: `docs/local-development.md`
-- Architecture entry point: `docs/architecture/README.md`
+If you are new to NightShift, read in this order:
 
-## Current MVP Boundaries
+1. [Usage entry](/Users/gongmeng/dev/code/nightshift/docs/usage/README.md)
+2. [Install](/Users/gongmeng/dev/code/nightshift/docs/usage/install.md)
+3. [Workflow](/Users/gongmeng/dev/code/nightshift/docs/usage/workflow.md)
+4. [Configuration](/Users/gongmeng/dev/code/nightshift/docs/usage/configuration.md)
+5. [Architecture entry](/Users/gongmeng/dev/code/nightshift/docs/architecture/README.md)
 
-What works now:
+If you want the active spec set, continue to [docs/superpowers/specs/README.md](/Users/gongmeng/dev/code/nightshift/docs/superpowers/specs/README.md).
 
-- load `nightshift.yaml`
-- read immutable issue contracts and current issue records
-- create issue worktrees and snapshots
-- execute via one selected engine adapter: `codex` or `claude`
-- run validation gates
-- persist run state, issue snapshots, attempt records, events, and alerts
-- recover interrupted runs into a new controlling run
-- generate a minimal report from run-scoped persisted history
+## Docs Map
 
-Current engine selection semantics:
-
-- `run-one` selects exactly one engine per attempt
-- selection order is `IssueContract.engine_preferences.primary`, then `runner.default_engine`
-- `engine_preferences.fallback` and `runner.fallback_engine` are currently reserved schema fields
-- the MVP harness does not auto-switch engines after a failure; operators should inspect persisted attempt records and artifacts directly
-
-What is intentionally not in the MVP yet:
-
-- requirement splitter
-- PR dispatcher / merge automation
-- notifications and dashboards
-- unattended multi-issue overnight scheduling policy beyond the current queue primitives
-
-## Remaining Non-MVP Gaps
-
-The current branch is intentionally not a full `v4.2.1` product-complete implementation. These gaps are known and not bugs in the current MVP scope:
-
-- no issue ingestion flow yet: contracts and current issue records must still be seeded before execution
-- no multi-issue overnight control loop yet: `run-one` exists, but `run`, `run --daemon`, and `stop` are not implemented
-- no queue admission command yet: `queue add` is still absent
-- no delivery automation yet: branch handoff, PR opening, review sync, and merge workflows are not wired
-- no operator log views yet: `logs --issue` is not implemented
-- config sections such as `retry`, `alerts`, and top-level validation command groups are modeled, but only minimally wired in the MVP
-- no rich morning report generator yet beyond the current minimal JSON historical report
-
-## Local Verification
-
-```bash
-python -m pytest -v
-```
-
-If you are working across multiple worktrees or editable installs, read `docs/local-development.md` first and prefer an explicit `PYTHONPATH` plus known interpreter path.
+- Usage: [docs/usage/README.md](/Users/gongmeng/dev/code/nightshift/docs/usage/README.md), [docs/usage/install.md](/Users/gongmeng/dev/code/nightshift/docs/usage/install.md), [docs/usage/configuration.md](/Users/gongmeng/dev/code/nightshift/docs/usage/configuration.md), [docs/usage/workflow.md](/Users/gongmeng/dev/code/nightshift/docs/usage/workflow.md), [docs/usage/deployment.md](/Users/gongmeng/dev/code/nightshift/docs/usage/deployment.md)
+- Product and architecture: [docs/architecture/README.md](/Users/gongmeng/dev/code/nightshift/docs/architecture/README.md), [docs/architecture/product/README.md](/Users/gongmeng/dev/code/nightshift/docs/architecture/product/README.md)
+- Product documentation design: [docs/architecture/product/documentation-information-architecture.md](/Users/gongmeng/dev/code/nightshift/docs/architecture/product/documentation-information-architecture.md)
+- Product coverage: [docs/architecture/coverage/nightshift-v4.2.1-coverage-matrix.md](/Users/gongmeng/dev/code/nightshift/docs/architecture/coverage/nightshift-v4.2.1-coverage-matrix.md)
+- Specs and design history: [docs/superpowers/specs/README.md](/Users/gongmeng/dev/code/nightshift/docs/superpowers/specs/README.md)
+- Verification and rehearsal evidence: [docs/2026-03-28-workflow-verification-report.md](/Users/gongmeng/dev/code/nightshift/docs/2026-03-28-workflow-verification-report.md), [docs/rehearsals/2026-03-29-gh7-product-e2e/README.md](/Users/gongmeng/dev/code/nightshift/docs/rehearsals/2026-03-29-gh7-product-e2e/README.md)
+- Contributor note: [docs/local-development.md](/Users/gongmeng/dev/code/nightshift/docs/local-development.md)

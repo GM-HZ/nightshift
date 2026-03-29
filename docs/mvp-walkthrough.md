@@ -1,6 +1,12 @@
 # NightShift MVP Walkthrough
 
-This walkthrough is for the current Python MVP that implements the `v4.2.1` kernel shape.
+This is an implementation-era reference for the Python MVP that implemented the `v4.2.1` kernel shape.
+It is useful for history and troubleshooting, but it is not the main operator guide.
+
+If you want the current product usage path, start here:
+
+- [docs/usage/workflow.md](./usage/workflow.md)
+- [docs/local-development.md](./local-development.md)
 
 ## Read This First
 
@@ -10,13 +16,13 @@ The active design source of truth is:
 - `docs/superpowers/specs/2026-03-27-nightshift-v4.2.1-unified-spec.md`
 - `docs/superpowers/specs/nightshift-v4.2.1/README.md`
 
-The current implementation is intentionally narrower than the full architecture. It is a kernel MVP, not the full overnight product workflow.
+The current implementation was intentionally narrower than the full architecture. It captured a kernel MVP, not the full overnight product workflow.
 
 For local multi-worktree development guidance, also read:
 
 - `docs/local-development.md`
 
-## What The MVP Can Do
+## What The MVP Could Do
 
 - execute a single approved issue with `run-one`
 - execute a single configured engine selection (`codex` or `claude`)
@@ -26,7 +32,7 @@ For local multi-worktree development guidance, also read:
 - generate a minimal historical report from persisted run history
 - inspect and reprioritize the current queue state
 
-## What The MVP Still Assumes
+## What The MVP Still Assumed
 
 The MVP does not yet include an issue ingestion or approval CLI. Before running the kernel, the target repository must already contain:
 
@@ -53,7 +59,7 @@ This branch intentionally stops short of the full `v4.2.1` product surface. The 
 - no rich report generator beyond the current minimal JSON historical report
 - retry budgets, circuit breaker behavior, alert delivery channels, and top-level validation command groups are not yet fully wired into orchestration policy
 
-Treat these as the explicit next layer above the current kernel MVP, not as hidden unfinished work inside the implemented slice set.
+Treat these as the next layer above the historical kernel MVP, not as hidden unfinished work inside the implemented slice set.
 
 ## Expected Repository Layout
 

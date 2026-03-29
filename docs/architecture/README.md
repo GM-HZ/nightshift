@@ -1,6 +1,7 @@
 # NightShift Architecture
 
-This directory is the current architecture entry point for the repository.
+This directory is the architecture entry point for the repository.
+It is for design readers, not for day-to-day operation.
 
 It exists to separate two different questions that were previously mixed together:
 
@@ -14,7 +15,9 @@ Its purpose is to make the next design and implementation steps easier to reason
 ## Current Status
 
 - kernel: implemented and verified
-- product workflow: partially designed, not fully implemented
+- product workflow: usable today with MVP simplifications and active design work above the kernel
+
+If you want to operate NightShift, start with [../usage/README.md](../usage/README.md).
 
 ## Boundary Confidence
 
