@@ -42,3 +42,12 @@ class GitHubIssueBridgeResult(BaseModel):
 
     payload: GitHubIssuePayload
     summary: GitHubIssueBridgeSummary
+
+
+class GitHubIssueBridgeDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    work_order_id: NonEmptyStr
+    issue_id: NonEmptyStr
+    work_order_path: NonEmptyStr
+    markdown: NonEmptyStr

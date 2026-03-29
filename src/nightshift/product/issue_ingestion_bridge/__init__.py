@@ -1,4 +1,5 @@
 from .models import (
+    GitHubIssueBridgeDraft,
     GitHubIssueBridgeResult,
     GitHubIssueBridgeSummary,
     GitHubIssuePayload,
@@ -6,6 +7,7 @@ from .models import (
 )
 
 __all__ = [
+    "GitHubIssueBridgeDraft",
     "GitHubIssueBridgeResult",
     "GitHubIssueBridgeSummary",
     "GitHubIssuePayload",
