@@ -89,7 +89,6 @@ These are still important NightShift product directions, but should currently be
 
 - splitter / proposal review CLI
 - GitHub issue ingestion CLI
-- batch execution commands such as `run --issues` and `run --all`
 - delivery / PR dispatcher CLI
 - unattended overnight control loop
 
@@ -98,7 +97,7 @@ These are still important NightShift product directions, but should currently be
 If you want to confirm the current live baseline, start with:
 
 - [../architecture/coverage/current-capability-truth-matrix.md](../architecture/coverage/current-capability-truth-matrix.md)
-- run the queue and kernel commands described above
+- run the queue, batch run, and kernel commands described above
 
 If you want the historical end-to-end rehearsal evidence for the broader product chain, start with:
 
