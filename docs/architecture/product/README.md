@@ -7,15 +7,15 @@ If you want to use NightShift, start with [../../usage/README.md](../../usage/RE
 
 ## Product Workflow Status
 
-The broader product chain is usable today in MVP form.
+The broader product workflow remains the active design direction above the kernel.
 
-The kernel can execute approved work once an execution-ready issue exists, and the surrounding flow now covers issue intake, queue admission, execution selection, and delivery with simplifications that are called out in the coverage matrix.
+The live repository currently exposes queue admission and execution-work-order materialization above the kernel, but it does not currently expose the full product CLI surface described in older MVP documents.
 
-The remaining design work is about tightening the product-side models and reducing the manual seams around that chain.
+Use the [current capability truth matrix](../coverage/current-capability-truth-matrix.md) when you need to know what is live in code today.
 
 ## What Belongs To Product Workflow
 
-These areas are outside the stable kernel boundary in `v4.2.1`:
+These areas remain outside the stable kernel boundary in `v4.2.1`:
 
 - requirement splitter
 - proposal review and approval flow
@@ -42,19 +42,16 @@ The current product-side design work is centered on these documents:
 - `docs/architecture/product/documentation-information-architecture.md`
 - `docs/architecture/product/execution-work-order-information-model.md`
 - `docs/architecture/product/execution-work-order-materialization.md`
-- `docs/architecture/product/splitter-proposal-review-mvp.md`
-- `docs/architecture/product/issue-ingestion-mvp.md`
-- `docs/architecture/product/queue-admission-mvp.md`
-- `docs/architecture/product/execution-selection-mvp.md`
-- `docs/architecture/product/delivery-pr-dispatcher-mvp.md`
 
 ## Important Boundary
 
-Today the repository supports a usable chain from requirement and issue intake through kernel execution and delivery, but several steps are still MVP-shaped:
+Today the repository has:
 
-- splitter and proposal review are intentionally thin
-- issue ingestion and queue admission are simpler than the target product model
-- delivery works, but it is not a full release-management system
+- a strong implemented kernel
+- live queue admission plus execution work order materialization
+- broader product workflow design work that is not fully represented in live code
+
+That distinction matters more than the older MVP narrative.
 
 ## Design Sources
 

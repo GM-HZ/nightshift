@@ -120,38 +120,21 @@ Practical conclusion:
 
 ### 2.1 Splitter / Proposal Review
 
-- local requirement file input: `implemented-with-mvp-simplification`
-- proposal batch persistence: `implemented`
-- proposal review states: `implemented`
-- proposal update / approve / reject CLI: `implemented`
-- publish into standard NightShift GitHub issue template: `implemented`
-- real GitHub issue create adapter: `implemented`
+- overall: `designed-not-implemented`
 
-Still simplified:
+Notes:
 
-- current splitter is intentionally thin and not yet high-quality decomposition
-- no richer review UX beyond CLI and file-backed review state
-- no skill-backed structured context bundle flow yet
-
-Status:
-
-- overall: `implemented-with-mvp-simplification`
+- this workflow existed in earlier MVP exploration and rehearsal work
+- it is not currently present as a live code path in the repository
 
 ### 2.2 GitHub Issue Ingestion
 
-- strict template parsing: `implemented`
-- provenance gate: `implemented`
-- admission gate: `implemented`
-- materialization into `IssueContract` and `IssueRecord`: `implemented`
-- `--materialize-only` review-first path: `implemented`
+- overall: `designed-not-implemented`
 
-Known simplification:
+Notes:
 
-- source linkage is currently embedded in `IssueContract.notes`, not a dedicated structured field
-
-Status:
-
-- overall: `implemented-with-mvp-simplification`
+- current repository state no longer exposes GitHub issue ingestion as a live code path
+- source linkage in the current execution-work-order path is now structured via `source_issue`
 
 ### 2.3 Queue Admission
 
@@ -167,41 +150,20 @@ Status:
 
 ### 2.4 Execution Selection
 
-- `run --issues`: `implemented`
-- `run --all`: `implemented`
-- sequential fail-fast batch execution: `implemented`
-- reuse of kernel `run-one`: `implemented`
+- overall: `designed-not-implemented`
 
-Still simplified:
+Notes:
 
-- no continue-on-failure
-- no daemon mode
-- no stop / pause / resume
-- no dependency-aware scheduling
-
-Status:
-
-- overall: `implemented-with-mvp-simplification`
+- the live CLI currently exposes `run-one`, not `run --issues` or `run --all`
 
 ### 2.5 Delivery / PR Dispatcher
 
-- explicit `deliver --issues`: `implemented`
-- `run --deliver` convenience hook: `implemented`
-- commit / push / PR create flow: `implemented`
-- `IssueRecord` delivery linkage update: `implemented`
-- real PR rehearsal: `implemented`
+- overall: `designed-not-implemented`
 
-Still simplified:
+Notes:
 
-- no merge automation
-- no PR update / reopen policy
-- no review-thread sync
-- no reviewer / label policy
-- accepted-result freezing is not implemented; delivery uses the current allowed-path worktree diff
-
-Status:
-
-- overall: `implemented-with-mvp-simplification`
+- delivery linkage remains in the domain model, but a live delivery CLI / dispatcher is not present in the current repository state
+- accepted-result freezing before delivery is still not modeled
 
 ### 2.6 Notifications
 
@@ -222,13 +184,13 @@ Status:
 
 ### 2.9 Product Workflow Summary
 
-Product workflow status overall: `implemented-with-mvp-simplification`
+Product workflow status overall: `designed-not-implemented`
 
 Practical conclusion:
 
-- the product chain is no longer theoretical
-- `requirement -> split -> publish issue -> ingest -> queue -> run -> deliver -> PR` has been rehearsed successfully
-- what remains is mostly depth, ergonomics, and policy richness, not absence of a usable product chain
+- the product architecture direction remains valuable and active
+- but the current live repository surface is narrower than the older MVP narrative
+- today the implemented product-side baseline is queue admission plus execution-work-order materialization
 
 ---
 
@@ -236,14 +198,14 @@ Practical conclusion:
 
 ### 3.1 Information Model And Handoff Semantics
 
-- `Requirement -> Proposal -> GitHub issue -> IssueContract` chain: `implemented-with-mvp-simplification`
+- `Requirement -> Proposal -> GitHub issue -> IssueContract` chain: `designed-not-implemented`
+- `Requirement -> Execution Work Order -> queue add -> IssueContract` chain: `implemented-with-mvp-simplification`
 - immutable contract boundary after materialization: `implemented`
 - human review before execution-facing handoff: `implemented-with-mvp-simplification`
 
 Needs tightening:
 
-- execution issue semantics are still spread across issue template, proposal schema, and contract fields
-- source linkage is not yet a first-class structured field
+- execution issue semantics are still split between older issue-centric documents and the newer execution-work-order model
 - accepted-result freezing for delivery is not yet modeled
 
 Status:
@@ -253,7 +215,7 @@ Status:
 ### 3.2 Config And Operator Environment
 
 - repo-local YAML config: `implemented`
-- product-side config sections for ingestion and delivery: `implemented-with-mvp-simplification`
+- layered project config and phased `.nightshift` migration: `implemented-with-mvp-simplification`
 - engine/token use via environment variables: `implemented-with-mvp-simplification`
 
 Not yet implemented:
@@ -261,7 +223,6 @@ Not yet implemented:
 - home-directory vs project-directory config layering
 - structured auth/token management
 - user-level engine/profile configuration model
-- project-local `.nightshift/` layout
 
 Status:
 
@@ -276,8 +237,8 @@ Status:
 
 Still weak:
 
-- top-level README is still closer to an engineering status document than a polished product entrypoint
-- usage docs, architecture docs, and deployment/operator docs are not yet cleanly separated
+- product workflow documents still overstate what is live in code
+- some product design references point to files that are no longer present
 
 Status:
 
@@ -309,10 +270,10 @@ The biggest missing parts are:
 
 - richer splitter / skill-based decomposition quality
 - stronger execution-issue information model
-- structured source-link metadata
 - accepted-result freezing before delivery
 - home + project config model
-- polished usage / architecture / deployment docs
+- product CLI surface above queue admission
+- polished usage / architecture / deployment docs aligned with live code
 - notifications
 - richer reporting
 - unattended overnight daemon workflow
@@ -342,7 +303,7 @@ Reason:
 `v4.2.1` status in this repository is best described as:
 
 - kernel: `implemented`
-- product workflow: `implemented-with-mvp-simplification`
+- product workflow: `designed-not-implemented`, with queue admission and execution-work-order materialization already live
 - cross-cutting operator model: `needs-design-tightening`
 
 That means the project is past the stage of proving whether NightShift can work.

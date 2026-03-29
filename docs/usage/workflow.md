@@ -1,43 +1,20 @@
 # Workflow
 
-This page describes the real NightShift product flow in product terms.
+This page describes the live operator flow in the current repository state.
 
-The current system is usable today, but some steps still have MVP-shaped simplifications. The important part is the end-to-end order, not a perfect abstraction boundary.
+NightShift still has a broader product direction in the design docs, but this page stays aligned with the code that actually exists today.
 
 ## Current Flow
 
-`requirement -> split -> proposals -> approve/update -> publish -> ingest -> queue add -> run -> deliver`
+`approved work order -> queue add -> run-one -> recover/report`
 
 ## Step By Step
 
 ### Requirement
 
-A human starts with a change request, usually as a short problem statement or a repo issue description.
+A human starts with a change request and turns it into an approved execution work order on the active branch.
 
-### Split
-
-NightShift turns the requirement into one or more proposals.
-
-This is implemented today, but the splitter is still intentionally thin. Treat the output as a reviewable starting point, not a high-quality decomposition guarantee.
-
-### Proposals
-
-Humans review the proposals, then update, approve, reject, or refine them.
-
-This review loop exists today, but the interaction is still MVP-shaped compared with the target product direction.
-
-### Publish
-
-The approved proposal is published into the repository workflow, typically as a GitHub issue that NightShift can ingest.
-
-The current product chain still uses GitHub issue publication as the practical handoff into execution.
-The newer execution-branch and work-order model is an active design direction above that flow.
-
-### Ingest
-
-NightShift materializes the approved issue into its immutable contract plus the current mutable record.
-
-This step is implemented today, but the semantics are still spread across the issue template, proposal shape, and contract fields.
+The broader `requirement -> proposal -> issue -> delivery` chain still exists in design and historical rehearsal evidence, but it is not the current live CLI surface.
 
 ### Queue Add
 
@@ -58,7 +35,7 @@ If the Work Order changes after that, the issue must go through `queue add` agai
 Current queue operations are available through the CLI:
 
 ```bash
-nightshift queue add NS-123 --repo /path/to/repo
+nightshift queue add NS-123 --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 nightshift queue status --repo /path/to/repo
 nightshift queue show NS-123 --repo /path/to/repo
 nightshift queue reprioritize NS-123 high --repo /path/to/repo
@@ -66,44 +43,54 @@ nightshift queue reprioritize NS-123 high --repo /path/to/repo
 
 `queue show` now also surfaces the frozen contract context in lightweight form, including `non_goals_count` and `context_files`.
 
-### Run
+### Run One
 
-NightShift executes queued work through the engine, validation, and recovery loop.
+NightShift currently exposes single-issue execution through `run-one`.
 
-The main current commands are:
+The live command is:
 
 ```bash
-nightshift run --issues NS-123 --config /path/to/repo/nightshift.yaml
-nightshift run --all --config /path/to/repo/nightshift.yaml
+nightshift run-one NS-123 --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 ```
-
-`run-one` still exists as a lower-level kernel-era command, but the product-facing flow should prefer `run`.
 
 This path is implemented today and writes durable run state, attempts, and artifacts.
 
-### Deliver
+### Recover And Report
 
-Accepted work is delivered back into the repository workflow as branch and pull-request state.
-
-The current delivery commands are:
+Recovery and reporting are also live today:
 
 ```bash
-nightshift deliver --issues NS-123 --config /path/to/repo/nightshift.yaml
-nightshift run --issues NS-123 --deliver --config /path/to/repo/nightshift.yaml
+nightshift recover --run RUN-123 --repo /path/to/repo
+nightshift report --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 ```
 
-That delivery path exists today, but it is still simpler than the final product direction. For example, merge automation and richer PR policy are not part of the current baseline.
+`report` remains minimal and historical, not a rich operator report layer.
 
 ## What Is MVP-Shaped Today
 
-- splitter quality is intentionally narrow
-- review UX is still file- and CLI-driven
-- execution semantics are clearer than the surrounding issue-to-contract handoff semantics
-- delivery is functional, but not a full release-management system
+- the operator surface is still kernel-first
+- queue admission and work-order freeze are live, but broader planning workflow is still design-forward
+- reporting is still minimal
+- the `.nightshift` migration is phased and compatibility-first
+
+## What Is Design Direction, Not Live CLI
+
+These are still important NightShift product directions, but should currently be read as design work rather than active commands:
+
+- splitter / proposal review CLI
+- GitHub issue ingestion CLI
+- batch execution commands such as `run --issues` and `run --all`
+- delivery / PR dispatcher CLI
+- unattended overnight control loop
 
 ## What To Use For Verification
 
-If you want to confirm the current flow end to end, start with:
+If you want to confirm the current live baseline, start with:
+
+- [../architecture/coverage/current-capability-truth-matrix.md](../architecture/coverage/current-capability-truth-matrix.md)
+- run the queue and kernel commands described above
+
+If you want the historical end-to-end rehearsal evidence for the broader product chain, start with:
 
 - [../2026-03-28-workflow-verification-report.md](../2026-03-28-workflow-verification-report.md)
 - [../rehearsals/2026-03-29-gh7-product-e2e/README.md](../rehearsals/2026-03-29-gh7-product-e2e/README.md)
