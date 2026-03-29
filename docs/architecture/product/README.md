@@ -37,6 +37,7 @@ The current product-side design work is centered on these documents:
 - `docs/architecture/product/config-and-workspace-model.md`
 - `docs/architecture/product/documentation-information-architecture.md`
 - `docs/architecture/product/execution-work-order-information-model.md`
+- `docs/architecture/product/execution-work-order-materialization.md`
 - `docs/architecture/product/splitter-proposal-review-mvp.md`
 - `docs/architecture/product/issue-ingestion-mvp.md`
 - `docs/architecture/product/queue-admission-mvp.md`

@@ -43,6 +43,17 @@ This step is implemented today, but the semantics are still spread across the is
 
 The issue enters the execution queue.
 
+This is also the current freeze point.
+
+At `queue add` time, NightShift:
+
+- reads the current approved Work Order
+- materializes an immutable `IssueContract`
+- records the frozen work order revision
+- admits the issue into the runnable queue only if that materialization succeeds
+
+If the Work Order changes after that, the issue must go through `queue add` again before `run` should be trusted to use the newer semantics.
+
 Current queue operations are available through the CLI:
 
 ```bash

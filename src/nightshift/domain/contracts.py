@@ -90,6 +90,14 @@ class TimeoutsContract(BaseModel):
     issue_budget_seconds: PositiveInt | None = None
 
 
+class SourceIssueContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    repo: NonEmptyStr
+    number: PositiveInt
+    url: NonEmptyStr | None = None
+
+
 class IssueContract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -109,6 +117,12 @@ class IssueContract(BaseModel):
     acceptance: tuple[NonEmptyStr, ...] = Field(default_factory=tuple)
     notes: NonEmptyStr | None = None
     risk: NonEmptyStr | None = None
+    work_order_id: NonEmptyStr | None = None
+    work_order_path: NonEmptyStr | None = None
+    work_order_revision: NonEmptyStr | None = None
+    source_issue: SourceIssueContract | None = None
+    source_branch: NonEmptyStr | None = None
+    source_pr: NonEmptyStr | None = None
 
     @model_validator(mode="after")
     def validate_execution_requirements(self) -> "IssueContract":

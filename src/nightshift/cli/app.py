@@ -9,6 +9,7 @@ from nightshift.engines.claude_code_adapter import ClaudeCodeAdapter
 from nightshift.engines.registry import EngineRegistry
 from nightshift.orchestrator import RunOrchestrator
 from nightshift.orchestrator.recovery import RecoveryOrchestrator
+from nightshift.product.queue_admission.service import admit_to_queue
 from nightshift.registry.issue_registry import IssueRegistry
 from nightshift.reporting.minimal_report import build_minimal_report
 from nightshift.store.state_store import StateStore
@@ -78,6 +79,28 @@ def _write_report_output(report_model: object, config: object | None) -> None:
     report_path = Path(output_directory) / f"{getattr(report_model, 'run_id')}.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report_model.model_dump(mode="json"), indent=2))
+
+
+def _format_queue_add_error(error: Exception) -> str:
+    errors = getattr(error, "errors", None)
+    if callable(errors):
+        try:
+            detail_list = errors()
+        except Exception:
+            detail_list = []
+        if detail_list:
+            detail = detail_list[0]
+            location = ".".join(str(part) for part in detail.get("loc", ()) if part != "__root__")
+            message = str(detail.get("msg", "")).strip()
+            if location and message.lower() == "field required":
+                return f"{location} is required"
+            if location and message:
+                return f"{location}: {message}"
+
+    message = str(error).strip()
+    if message:
+        return message.splitlines()[0]
+    return error.__class__.__name__
 
 
 @app.command("run-one")
@@ -161,6 +184,29 @@ def queue_show(
         f"attempt_state={record.attempt_state} "
         f"delivery_state={record.delivery_state}"
     )
+
+
+@queue_app.command("add")
+def queue_add(
+    issue_id: str,
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    config: Path = typer.Option(..., "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+) -> None:
+    loaded_config = load_config(config)
+    issue_registry = build_issue_registry(repo)
+
+    try:
+        result = admit_to_queue(issue_registry, [issue_id], config=loaded_config)
+    except Exception as error:
+        typer.echo(f"queue add failed for {issue_id}: {_format_queue_add_error(error)}", err=True)
+        raise typer.Exit(1) from error
+
+    status = result.statuses[0]
+    if status.status == "already_admitted":
+        typer.echo(f"queue add: {issue_id} frozen contract refreshed (priority={status.queue_priority})")
+        return
+
+    typer.echo(f"queue add: {issue_id} frozen and admitted to queue (priority={status.queue_priority})")
 
 
 @queue_app.command("reprioritize")

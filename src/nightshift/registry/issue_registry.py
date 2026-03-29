@@ -33,8 +33,15 @@ class IssueRegistry:
             existing = read_model_yaml(path, IssueContract)
             if existing == issue_contract:
                 return
-            raise ValueError(f"contract already exists for issue_id={issue_contract.issue_id}")
+            if not existing.work_order_revision or not issue_contract.work_order_revision:
+                raise ValueError(f"contract already exists for issue_id={issue_contract.issue_id}")
+            if existing.work_order_revision == issue_contract.work_order_revision:
+                raise ValueError(
+                    f"contract revision already exists for issue_id={issue_contract.issue_id} "
+                    f"revision={issue_contract.work_order_revision}"
+                )
 
+        self._write_contract_revision(issue_contract)
         write_model_yaml(path, issue_contract)
 
     def get_contract(self, issue_id: str) -> IssueContract:
@@ -47,6 +54,12 @@ class IssueRegistry:
             if kind is None or contract.kind == IssueKind(kind):
                 contracts.append(contract)
         return contracts
+
+    def list_contract_revisions(self, issue_id: str) -> list[IssueContract]:
+        revisions_dir = self._contract_revisions_dir(issue_id)
+        if not revisions_dir.exists():
+            return []
+        return [read_model_yaml(path, IssueContract) for path in sorted(revisions_dir.glob("*.yaml"))]
 
     def save_record(self, issue_record: IssueRecord) -> None:
         write_model_json(self._record_path(issue_record.issue_id), issue_record)
@@ -114,6 +127,9 @@ class IssueRegistry:
     def _records_dir(self) -> Path:
         return self.root / "nightshift-data" / "issue-records"
 
+    def _contract_revisions_root(self) -> Path:
+        return self.root / "nightshift" / "contracts"
+
     def _contract_path(self, issue_id: str) -> Path:
         safe_issue_id = safe_path_component(issue_id, field_name="issue_id")
         return self._contracts_dir() / f"{safe_issue_id}.yaml"
@@ -121,6 +137,30 @@ class IssueRegistry:
     def _record_path(self, issue_id: str) -> Path:
         safe_issue_id = safe_path_component(issue_id, field_name="issue_id")
         return self._records_dir() / f"{safe_issue_id}.json"
+
+    def _contract_revisions_dir(self, issue_id: str) -> Path:
+        safe_issue_id = safe_path_component(issue_id, field_name="issue_id")
+        return self._contract_revisions_root() / safe_issue_id
+
+    def _write_contract_revision(self, issue_contract: IssueContract) -> None:
+        revision = issue_contract.work_order_revision
+        if not revision:
+            return
+
+        revisions_dir = self._contract_revisions_dir(issue_contract.issue_id)
+        existing_paths = sorted(revisions_dir.glob("*.yaml")) if revisions_dir.exists() else []
+        for path in existing_paths:
+            existing = read_model_yaml(path, IssueContract)
+            if existing == issue_contract:
+                return
+            if existing.work_order_revision == revision:
+                raise ValueError(
+                    f"contract revision already exists for issue_id={issue_contract.issue_id} revision={revision}"
+                )
+
+        sequence = len(existing_paths) + 1
+        safe_revision = safe_path_component(revision, field_name="work_order_revision")
+        write_model_yaml(revisions_dir / f"{sequence:04d}-{safe_revision}.yaml", issue_contract)
 
     def _validated_update(self, issue_id: str, update: dict[str, object]) -> IssueRecord:
         record = self.get_record(issue_id)

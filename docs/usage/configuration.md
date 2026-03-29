@@ -29,6 +29,15 @@ The current config file controls:
 
 A minimal example lives in [../../examples/nightshift.yaml](../../examples/nightshift.yaml).
 
+In the current implementation, `queue add` is also the freeze point for Work Orders:
+
+- NightShift reads the current approved Work Order
+- materializes an immutable `IssueContract`
+- writes the current frozen contract under `nightshift/issues/`
+- preserves revision history under `nightshift/contracts/<issue_id>/`
+
+If the Work Order changes later, a new `queue add` is required so NightShift can freeze a new contract revision.
+
 ## Target Direction
 
 The long-term model is split into:
