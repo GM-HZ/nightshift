@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
@@ -151,6 +152,20 @@ class RunOrchestrator:
             validation_result = self.validation_gate.validate(issue_contract, workspace, attempt_record)
             accepted = bool(self.validation_gate.evaluate_acceptance(validation_result))
 
+            if accepted:
+                self._write_delivery_snapshot(
+                    artifact_dir=artifact_dir,
+                    issue_id=issue_id,
+                    run_id=run_id,
+                    attempt_id=attempt_id,
+                    issue_contract=issue_contract,
+                    workspace=workspace,
+                    snapshot=snapshot,
+                    validation_result=validation_result,
+                    engine_name=adapter.name(),
+                    engine_invocation_id=engine_outcome.engine_invocation_id,
+                )
+
             final_attempt = AttemptRecord(
                 attempt_id=attempt_id,
                 issue_id=issue_id,
@@ -185,6 +200,7 @@ class RunOrchestrator:
                     running_issue_record,
                     issue_state=IssueState.done,
                     attempt_state=AttemptState.accepted,
+                    delivery_state=DeliveryState.branch_ready,
                     current_run_id=run_id,
                     latest_attempt_id=attempt_id,
                     accepted_attempt_id=attempt_id,
@@ -198,6 +214,7 @@ class RunOrchestrator:
                     current_issue_record,
                     issue_state=IssueState.ready,
                     attempt_state=AttemptState.rejected,
+                    delivery_state=DeliveryState.none,
                     current_run_id=run_id,
                     latest_attempt_id=attempt_id,
                     accepted_attempt_id=None,
@@ -237,6 +254,7 @@ class RunOrchestrator:
                 current_issue_record,
                 issue_state=IssueState.ready,
                 attempt_state=AttemptState.aborted,
+                delivery_state=DeliveryState.none,
                 current_run_id=run_id,
                 latest_attempt_id=attempt_id,
                 accepted_attempt_id=None,
@@ -266,6 +284,7 @@ class RunOrchestrator:
         *,
         issue_state: IssueState,
         attempt_state: AttemptState,
+        delivery_state: DeliveryState,
         current_run_id: str,
         latest_attempt_id: str,
         accepted_attempt_id: str | None,
@@ -278,7 +297,7 @@ class RunOrchestrator:
             {
                 "issue_state": issue_state,
                 "attempt_state": attempt_state,
-                "delivery_state": DeliveryState.none,
+                "delivery_state": delivery_state,
                 "current_run_id": current_run_id,
                 "latest_attempt_id": latest_attempt_id,
                 "accepted_attempt_id": accepted_attempt_id,
@@ -289,6 +308,43 @@ class RunOrchestrator:
             }
         )
         return IssueRecord.model_validate(payload)
+
+    def _write_delivery_snapshot(
+        self,
+        *,
+        artifact_dir: Path,
+        issue_id: str,
+        run_id: str,
+        attempt_id: str,
+        issue_contract: Any,
+        workspace: Any,
+        snapshot: Any,
+        validation_result: Any,
+        engine_name: str,
+        engine_invocation_id: str,
+    ) -> None:
+        snapshot_path = artifact_dir / "delivery" / "snapshot.json"
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "issue_id": issue_id,
+            "run_id": run_id,
+            "attempt_id": attempt_id,
+            "work_order_id": getattr(issue_contract, "work_order_id", None) or issue_contract.issue_id,
+            "work_order_revision": getattr(issue_contract, "work_order_revision", None),
+            "contract_revision": getattr(issue_contract, "work_order_revision", None),
+            "delivery_state": DeliveryState.branch_ready,
+            "branch_name": workspace.branch_name,
+            "worktree_path": str(workspace.worktree_path),
+            "pre_edit_commit_sha": snapshot.pre_edit_commit_sha,
+            "validation_summary": getattr(validation_result, "summary", None),
+            "accepted_at": self.now_factory().isoformat(),
+            "engine_name": engine_name,
+            "engine_invocation_id": engine_invocation_id,
+        }
+        source_issue = getattr(issue_contract, "source_issue", None)
+        if source_issue is not None:
+            payload["source_issue"] = source_issue.model_dump(mode="json")
+        snapshot_path.write_text(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
 
     def _append_event(
         self,

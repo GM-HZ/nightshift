@@ -254,6 +254,7 @@ class FakeValidationGate:
 def make_orchestrator(
     *,
     validation_passed: bool,
+    root: Path | None = None,
     raise_on_execute: bool = False,
     raise_on_event_type: str | None = None,
     outcome_type: str = "success",
@@ -262,7 +263,7 @@ def make_orchestrator(
     fallback_recoverable: bool = False,
 ) -> tuple[RunOrchestrator, FakeIssueRegistry, FakeStateStore, FakeWorkspaceManager, FakeEngineRegistry]:
     issue_registry = FakeIssueRegistry()
-    state_store = FakeStateStore(root=Path("/tmp/nightshift"), raise_on_event_type=raise_on_event_type)
+    state_store = FakeStateStore(root=root or Path("/tmp/nightshift"), raise_on_event_type=raise_on_event_type)
     workspace_manager = FakeWorkspaceManager()
     adapter = FakeAdapter(
         adapter_name="codex",
@@ -293,8 +294,11 @@ def make_orchestrator(
     return orchestrator, issue_registry, state_store, workspace_manager, engine_registry
 
 
-def test_run_orchestrator_accepts_issue_and_persists_final_state() -> None:
-    orchestrator, issue_registry, state_store, workspace_manager, _engine_registry = make_orchestrator(validation_passed=True)
+def test_run_orchestrator_accepts_issue_and_persists_final_state(tmp_path: Path) -> None:
+    orchestrator, issue_registry, state_store, workspace_manager, _engine_registry = make_orchestrator(
+        validation_passed=True,
+        root=tmp_path,
+    )
 
     result = orchestrator.run_one("ISSUE-1")
 
@@ -303,6 +307,7 @@ def test_run_orchestrator_accepts_issue_and_persists_final_state() -> None:
     assert issue_registry.record.attempt_state == AttemptState.accepted
     assert issue_registry.record.accepted_attempt_id == "ATTEMPT-1"
     assert issue_registry.record.branch_name == workspace_manager.workspace.branch_name
+    assert issue_registry.record.delivery_state == DeliveryState.branch_ready
     assert state_store.active_runs == ["RUN-1", None]
     assert state_store.saved_run_states[0].run_state == RunLifecycleState.initializing
     assert state_store.saved_run_states[-1].run_state == RunLifecycleState.completed
@@ -310,9 +315,15 @@ def test_run_orchestrator_accepts_issue_and_persists_final_state() -> None:
     assert state_store.saved_run_states[-1].issues_completed == 1
     assert state_store.saved_attempt_records[-1].attempt_state == AttemptState.accepted
     assert state_store.saved_attempt_records[-1].validation_result is not None
-    assert state_store.saved_attempt_records[-1].artifact_dir == "/tmp/nightshift/nightshift-data/runs/RUN-1/artifacts/attempts/ATTEMPT-1"
+    assert state_store.saved_attempt_records[-1].artifact_dir == f"{tmp_path}/nightshift-data/runs/RUN-1/artifacts/attempts/ATTEMPT-1"
     assert state_store.saved_attempt_records[-1].engine_capabilities_snapshot["supports_noninteractive_mode"] is True
     assert state_store.saved_snapshots[-1][1].issue_state == IssueState.done
+    snapshot_path = Path(state_store.saved_attempt_records[-1].artifact_dir) / "delivery" / "snapshot.json"
+    assert snapshot_path.exists()
+    snapshot_payload = snapshot_path.read_text()
+    assert '"delivery_state": "branch_ready"' in snapshot_payload
+    assert '"issue_id": "ISSUE-1"' in snapshot_payload
+    assert '"work_order_id": "ISSUE-1"' in snapshot_payload
     assert workspace_manager.rollback_calls == 0
     assert [event.event_type for event in state_store.events] == [
         "run_started",
@@ -322,8 +333,11 @@ def test_run_orchestrator_accepts_issue_and_persists_final_state() -> None:
     ]
 
 
-def test_run_orchestrator_rejects_issue_and_rolls_back_workspace() -> None:
-    orchestrator, issue_registry, state_store, workspace_manager, _engine_registry = make_orchestrator(validation_passed=False)
+def test_run_orchestrator_rejects_issue_and_rolls_back_workspace(tmp_path: Path) -> None:
+    orchestrator, issue_registry, state_store, workspace_manager, _engine_registry = make_orchestrator(
+        validation_passed=False,
+        root=tmp_path,
+    )
 
     result = orchestrator.run_one("ISSUE-1")
 
@@ -335,11 +349,14 @@ def test_run_orchestrator_rejects_issue_and_rolls_back_workspace() -> None:
     assert state_store.saved_attempt_records[-1].attempt_state == AttemptState.rejected
     assert state_store.saved_run_states[-1].issues_completed == 0
     assert state_store.saved_snapshots[-1][1].issue_state == IssueState.ready
+    snapshot_path = Path(state_store.root) / "nightshift-data" / "runs" / "RUN-1" / "artifacts" / "attempts" / "ATTEMPT-1" / "delivery" / "snapshot.json"
+    assert not snapshot_path.exists()
 
 
-def test_run_orchestrator_clears_active_run_and_aborts_issue_on_engine_exception() -> None:
+def test_run_orchestrator_clears_active_run_and_aborts_issue_on_engine_exception(tmp_path: Path) -> None:
     orchestrator, issue_registry, state_store, workspace_manager, _engine_registry = make_orchestrator(
         validation_passed=True,
+        root=tmp_path,
         raise_on_execute=True,
     )
 
@@ -356,6 +373,8 @@ def test_run_orchestrator_clears_active_run_and_aborts_issue_on_engine_exception
     assert issue_registry.record.issue_state == IssueState.ready
     assert issue_registry.record.attempt_state == AttemptState.aborted
     assert state_store.saved_snapshots[-1][1].issue_state == IssueState.ready
+    snapshot_path = Path(state_store.root) / "nightshift-data" / "runs" / "RUN-1" / "artifacts" / "attempts" / "ATTEMPT-1" / "delivery" / "snapshot.json"
+    assert not snapshot_path.exists()
     assert state_store.events[-1].event_type == "run_failed"
 
 
