@@ -18,6 +18,7 @@ This backlog assumes the current repository baseline is:
 - GitHub issue ingestion bridge: implemented
 - queue admission and execution work order materialization: implemented
 - product-facing batch run surface: implemented
+- overnight control loop MVP: implemented
 - conservative explicit delivery surface: implemented
 - `.nightshift` migration phases 1-3: implemented
 
@@ -90,24 +91,25 @@ What “done” means:
 
 These items matter for unattended nighttime operation, but they do not block the immediate product loop closure.
 
-### 4. Overnight Control Loop
+### 4. Overnight Control Loop Deepening
 
 Current gap:
 
-- no unattended daemon loop
-- no stop / pause / resume control
+- an MVP unattended daemon loop is now live through:
+  - `run --all --daemon`
+  - `stop`
+- no pause / resume control
 - no continue-on-failure behavior
 - no dependency-aware or slot-aware scheduling
 
 Why it matters:
 
-- current `run --issues` and `run --all` are useful, but still operator-invoked batch commands
-- true overnight operation needs a stronger control layer
+- the MVP loop is enough to restore a governed unattended execution window
+- but richer unattended operation still needs stronger policies and scheduling
 
 What “done” means:
 
-- NightShift can govern a multi-issue unattended execution window
-- control behavior is explicit and observable
+- NightShift can handle richer overnight policies without leaving the current conservative MVP shape
 
 ### 5. Notifications And Alerts
 

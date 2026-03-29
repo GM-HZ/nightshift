@@ -6,7 +6,7 @@ NightShift still has a broader product direction in the design docs, but this pa
 
 ## Current Flow
 
-`GitHub issue -> issue ingest-github -> approved work order -> queue add -> run --issues|run --all -> deliver --issues -> recover/report`
+`GitHub issue -> issue ingest-github -> approved work order -> queue add -> run --issues|run --all|run --all --daemon -> deliver --issues -> recover/report`
 
 ## Step By Step
 
@@ -68,9 +68,24 @@ The live commands are:
 ```bash
 nightshift run --issues NS-123,NS-124 --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 nightshift run --all --repo /path/to/repo --config /path/to/repo/nightshift.yaml
+nightshift run --all --daemon --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 ```
 
 `run` executes sequentially and fails fast. It reuses the existing kernel execution path for each selected issue.
+
+The current unattended control slice is:
+
+- `run --all --daemon`
+- `stop`
+
+The daemon loop is still conservative:
+
+- sequential
+- fail-fast
+- stop-aware between issues
+- no pause/resume
+- no continue-on-failure
+- no slot-aware scheduling
 
 `run-one` still exists as the lower-level kernel command for a single issue:
 
@@ -115,6 +130,7 @@ nightshift report --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 - queue admission and work-order freeze are live
 - batch execution is live, but still sequential and fail-fast
 - explicit delivery is live, but still conservative
+- unattended overnight control is live, but still MVP-shaped
 - reporting is still minimal
 - the `.nightshift` migration is phased and compatibility-first
 
@@ -123,7 +139,7 @@ nightshift report --repo /path/to/repo --config /path/to/repo/nightshift.yaml
 These are still important NightShift product directions, but should currently be read as design work rather than active commands:
 
 - splitter / proposal review CLI
-- unattended overnight control loop
+- richer overnight policies such as pause/resume, continue-on-failure, and slot-aware scheduling
 
 ## What To Use For Verification
 

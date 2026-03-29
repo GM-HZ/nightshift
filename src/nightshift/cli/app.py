@@ -7,6 +7,7 @@ import typer
 from nightshift.config.loader import load_config
 from nightshift.config.loader import load_user_config
 from nightshift.config.loader import load_project_config
+from nightshift.domain import RunLifecycleState
 from nightshift.domain import DeliveryState
 from nightshift.config.models import NightShiftConfig
 from nightshift.engines.codex_adapter import CodexAdapter
@@ -24,6 +25,7 @@ from nightshift.product.execution_selection import (
     ExecutionSelectionBatchRequest,
     execute_selection_batch,
 )
+from nightshift.product.overnight import OvernightControlLoopRequest, OvernightControlLoopService
 from nightshift.product.issue_ingestion_bridge.github_client import (
     GitHubIssueClient,
     GitHubIssueClientError,
@@ -226,6 +228,7 @@ def _build_delivery_pr_body(snapshot: dict[str, object]) -> str:
 def run(
     issues: str | None = typer.Option(None, "--issues", help="Comma-separated issue ids to execute in order."),
     run_all: bool = typer.Option(False, "--all", help="Execute all currently schedulable issues."),
+    daemon: bool = typer.Option(False, "--daemon", help="Run unattended sequential overnight loop against all schedulable issues."),
     repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
     config: Path | None = typer.Option(None, "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
 ) -> None:
@@ -233,6 +236,29 @@ def run(
     repo_root = _resolve_repo_root(repo, loaded_config)
     issue_registry = build_issue_registry(repo_root)
     orchestrator = build_run_orchestrator(repo_root, loaded_config)
+    state_store = StateStore(repo_root)
+
+    if daemon:
+        if issues:
+            typer.echo("--daemon cannot be combined with --issues", err=True)
+            raise typer.Exit(1)
+        if not run_all:
+            typer.echo("--daemon currently requires --all", err=True)
+            raise typer.Exit(1)
+
+        result = OvernightControlLoopService(state_store=state_store).run(
+            orchestrator=orchestrator,
+            issue_registry=issue_registry,
+            request=OvernightControlLoopRequest(run_all=True, fail_fast=True),
+        )
+        typer.echo(
+            f"daemon run {result.daemon_run_id}: run_state={result.run_state} "
+            f"requested={result.summary.requested} completed={result.summary.completed} "
+            f"stopped_reason={result.summary.stopped_reason}"
+        )
+        if result.run_state == RunLifecycleState.aborted:
+            raise typer.Exit(1)
+        return
 
     try:
         request = _build_execution_selection_request(issues, run_all)
@@ -250,6 +276,23 @@ def run(
         f"completed={result.summary.completed} "
         f"stopped_early={result.summary.stopped_early}"
     )
+
+
+@app.command("stop")
+def stop(
+    repo: Path | None = typer.Option(None, "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    config: Path | None = typer.Option(None, "--config", exists=True, dir_okay=False, readable=True, resolve_path=True),
+) -> None:
+    loaded_config = _load_cli_config(repo, config, require_repo_config=True)
+    repo_root = _resolve_repo_root(repo, loaded_config)
+    state_store = StateStore(repo_root)
+    daemon_run_id = state_store.get_active_daemon_run()
+    if not daemon_run_id:
+        typer.echo("stop failed: no active daemon run", err=True)
+        raise typer.Exit(1)
+
+    metadata = OvernightControlLoopService(state_store=state_store).request_stop(daemon_run_id)
+    typer.echo(f"stop requested for {metadata.run_id}")
 
 
 @app.command("run-one")

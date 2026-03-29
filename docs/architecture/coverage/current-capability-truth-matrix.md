@@ -23,7 +23,9 @@ The live CLI currently exposes these commands:
 - `deliver --issues`
 - `run --issues`
 - `run --all`
+- `run --all --daemon`
 - `run-one`
+- `stop`
 - `recover`
 - `report`
 - `queue status`
@@ -75,6 +77,7 @@ Only these product-side capabilities are currently present in code:
 - queue-time contract freeze
 - frozen work order provenance on `IssueContract`
 - product-facing batch execution commands
+- unattended overnight daemon loop MVP
 - accepted delivery snapshot freeze
 - explicit delivery command and PR-create bridge
 - contract context field preservation:
@@ -97,7 +100,10 @@ These were previously described in design docs or historical implementation note
 - proposal persistence and proposal review CLI
 - notification adapters
 - rich report generator
-- unattended overnight daemon loop
+- richer overnight control policies:
+  - pause / resume
+  - continue-on-failure
+  - slot-aware or dependency-aware scheduling
 
 Practical consequence:
 
@@ -149,7 +155,7 @@ If docs are updated after reading this file, the highest-priority corrections ar
 The current repository state is best described as:
 
 - kernel: live and strong
-- planning bridge, queue admission, batch run, and explicit delivery: live
+- planning bridge, queue admission, batch run, overnight control, and explicit delivery: live
 - broader product workflow beyond those surfaces: still partly design direction
 
 This is the file to trust first when deciding whether a capability exists now or is still planned.

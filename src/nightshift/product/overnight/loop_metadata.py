@@ -13,5 +13,10 @@ class DaemonLoopMetadata(BaseModel):
     fail_fast: bool = True
     stop_requested: bool = False
     stopped_reason: str | None = None
+    issues_attempted: int = 0
+    issues_completed: int = 0
+    last_issue_id: str | None = None
+    last_run_id: str | None = None
+    failed_issue_id: str | None = None
     created_at: datetime
     updated_at: datetime
