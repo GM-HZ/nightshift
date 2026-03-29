@@ -137,7 +137,7 @@ def run_one(
         result = orchestrator.run_one(issue_id)
     except Exception as error:
         typer.echo(
-            f"run-one failed for {issue_id}: {error}. Inspect the runtime runs root (nightshift-data/runs/ for compatibility or .nightshift/runs/ for layered repos) for persisted state and artifacts.",
+            f"run-one failed for {issue_id}: {error}. Inspect the runtime roots (compatibility: nightshift-data/runs/; layered: .nightshift/runs/ and .nightshift/artifacts/) for persisted state and artifacts.",
             err=True,
         )
         raise typer.Exit(1) from error

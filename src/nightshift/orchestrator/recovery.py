@@ -294,6 +294,8 @@ class RecoveryOrchestrator:
     def _artifact_dir(self, run_id: str, attempt_id: str) -> Path:
         runtime_storage = getattr(self.state_store, "runtime_storage", None)
         if runtime_storage is not None:
+            if getattr(runtime_storage, "mode", None) == "layered":
+                return Path(runtime_storage.artifacts_root) / "runs" / run_id / "attempts" / attempt_id
             base_dir = runtime_storage.artifacts_root
         else:
             base_dir = Path(self.state_store.root) / "nightshift-data" / "runs"

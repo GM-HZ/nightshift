@@ -196,6 +196,26 @@ def test_issue_registry_saves_and_loads_record(tmp_path: Path) -> None:
     assert (tmp_path / "nightshift-data" / "issue-records" / "ISSUE-1.json").is_file()
 
 
+def test_issue_registry_uses_layered_runtime_record_paths_when_marker_declares_layered(tmp_path: Path) -> None:
+    migration_marker = tmp_path / ".nightshift/config/migration.yaml"
+    migration_marker.parent.mkdir(parents=True, exist_ok=True)
+    migration_marker.write_text(
+        """
+layout_version: 1
+project_config_source: layered
+runtime_layout_source: layered
+contract_storage_source: layered
+"""
+    )
+    registry = IssueRegistry(tmp_path)
+    record = make_record("ISSUE-1")
+
+    registry.save_record(record)
+
+    assert registry.get_record("ISSUE-1") == record
+    assert (tmp_path / ".nightshift" / "records" / "current" / "ISSUE-1.json").is_file()
+
+
 def test_issue_registry_lists_schedulable_records(tmp_path: Path) -> None:
     registry = IssueRegistry(tmp_path)
     registry.save_record(make_record("ISSUE-1", issue_state=IssueState.ready))

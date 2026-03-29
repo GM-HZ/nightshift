@@ -320,12 +320,12 @@ def test_recovery_defaults_to_runtime_storage_artifact_root_when_available() -> 
         validation_passed=True,
         ids=["recovery-run-1", "recovery-attempt-1"],
     )
-    state_store.runtime_storage = SimpleNamespace(artifacts_root=Path("/tmp/runtime-artifacts"))
+    state_store.runtime_storage = SimpleNamespace(mode="layered", artifacts_root=Path("/tmp/runtime-artifacts"))
 
     orchestrator.recover_run("run-1")
 
-    assert state_store.saved_attempt_records[0].artifact_dir == "/tmp/runtime-artifacts/recovery-run-1/artifacts/attempts/recovery-attempt-1"
-    assert state_store.saved_attempt_records[-1].artifact_dir == "/tmp/runtime-artifacts/recovery-run-1/artifacts/attempts/recovery-attempt-1"
+    assert state_store.saved_attempt_records[0].artifact_dir == "/tmp/runtime-artifacts/runs/recovery-run-1/attempts/recovery-attempt-1"
+    assert state_store.saved_attempt_records[-1].artifact_dir == "/tmp/runtime-artifacts/runs/recovery-run-1/attempts/recovery-attempt-1"
 
 
 def test_recover_command_emits_recovery_run_id(monkeypatch, tmp_path: Path) -> None:

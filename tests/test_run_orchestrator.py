@@ -455,12 +455,12 @@ def test_run_orchestrator_uses_configured_artifact_root() -> None:
 
 def test_run_orchestrator_defaults_to_runtime_storage_artifact_root_when_available() -> None:
     orchestrator, _issue_registry, state_store, _workspace_manager, _engine_registry = make_orchestrator(validation_passed=True)
-    state_store.runtime_storage = SimpleNamespace(artifacts_root=Path("/tmp/runtime-artifacts"))
+    state_store.runtime_storage = SimpleNamespace(mode="layered", artifacts_root=Path("/tmp/runtime-artifacts"))
 
     result = orchestrator.run_one("ISSUE-1")
 
     assert result.run_id == "RUN-1"
-    assert state_store.saved_attempt_records[-1].artifact_dir == "/tmp/runtime-artifacts/RUN-1/artifacts/attempts/ATTEMPT-1"
+    assert state_store.saved_attempt_records[-1].artifact_dir == "/tmp/runtime-artifacts/runs/RUN-1/attempts/ATTEMPT-1"
 
 
 def test_run_one_cli_uses_builder_and_prints_result(tmp_path: Path, monkeypatch) -> None:
@@ -584,4 +584,5 @@ def test_run_one_cli_surfaces_operator_friendly_failure_summary(tmp_path: Path, 
     assert "engine outcome engine_crash cannot be accepted" in result.stderr
     assert "nightshift-data/runs/" in result.stderr
     assert ".nightshift/runs/" in result.stderr
+    assert ".nightshift/artifacts/" in result.stderr
     assert "Traceback" not in result.stderr

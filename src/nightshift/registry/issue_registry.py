@@ -6,7 +6,7 @@ from pathlib import Path
 from nightshift.domain import AttemptState, DeliveryState, IssueKind, IssueState
 from nightshift.domain.contracts import IssueContract
 from nightshift.domain.records import IssueRecord
-from nightshift.config.loader import resolve_contract_storage
+from nightshift.config.loader import resolve_contract_storage, resolve_runtime_storage
 from nightshift.store.filesystem import (
     read_model_json,
     read_model_yaml,
@@ -28,6 +28,7 @@ class IssueRegistry:
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root)
         self._contract_storage = resolve_contract_storage(self.root)
+        self._runtime_storage = resolve_runtime_storage(self.root)
 
     def save_contract(self, issue_contract: IssueContract) -> None:
         path = self._contract_path(issue_contract.issue_id)
@@ -127,7 +128,7 @@ class IssueRegistry:
         return self._contract_storage.current_path
 
     def _records_dir(self) -> Path:
-        return self.root / "nightshift-data" / "issue-records"
+        return self._runtime_storage.records_root
 
     def _contract_revisions_root(self) -> Path:
         return self._contract_storage.history_path
