@@ -7,8 +7,8 @@ import json
 from typer.testing import CliRunner
 
 from nightshift.cli.app import app
-from nightshift.domain import AttemptState, DeliveryState, IssueState, RunLifecycleState
-from nightshift.domain.records import AttemptRecord, EventRecord, IssueRecord, RunState
+from nightshift.domain import AlertSeverity, AttemptState, DeliveryState, IssueState, RunLifecycleState
+from nightshift.domain.records import AlertEvent, AttemptRecord, EventRecord, IssueRecord, RunState
 from nightshift.reporting.minimal_report import MinimalReport, build_minimal_report, resolve_report_run_id
 from nightshift.store.state_store import StateStore
 
@@ -89,6 +89,22 @@ def make_event(seq: int, run_id: str, event_type: str) -> EventRecord:
     )
 
 
+def make_alert(run_id: str, issue_id: str, severity: AlertSeverity) -> AlertEvent:
+    return AlertEvent.model_validate(
+        {
+            "alert_id": f"ALERT-{run_id}-{issue_id}-{severity.value}",
+            "run_id": run_id,
+            "issue_id": issue_id,
+            "severity": severity,
+            "event_type": "issue_blocked",
+            "summary": "blocked",
+            "details": {"reason": "test"},
+            "created_at": "2026-03-28T00:00:01Z",
+            "delivery_status": "not_sent",
+        }
+    )
+
+
 def test_resolve_report_run_id_prefers_active_run_then_latest_run(tmp_path: Path) -> None:
     store = StateStore(tmp_path)
     store.save_run_state(make_run_state("run-20260328T000100Z-a"))
@@ -105,14 +121,26 @@ def test_resolve_report_run_id_prefers_active_run_then_latest_run(tmp_path: Path
 def test_build_minimal_report_summarizes_persisted_history(tmp_path: Path) -> None:
     store = StateStore(tmp_path)
     store.save_run_state(make_run_state("run-1"))
-    store.save_run_issue_snapshot("run-1", make_issue_record("ISSUE-1", issue_state=IssueState.done))
+    store.save_run_issue_snapshot(
+        "run-1",
+        make_issue_record("ISSUE-1", issue_state=IssueState.done).model_copy(
+            update={
+                "delivery_state": DeliveryState.pr_opened,
+                "delivery_ref": "https://github.com/GM-HZ/nightshift/pull/1",
+                "delivery_id": "1",
+            }
+        ),
+    )
     store.save_run_issue_snapshot("run-1", make_issue_record("ISSUE-2", issue_state=IssueState.ready))
     store.save_attempt_record(make_attempt_record("ATT-1", "ISSUE-1", "run-1", state=AttemptState.accepted))
     store.save_attempt_record(make_attempt_record("ATT-2", "ISSUE-2", "run-1", state=AttemptState.rejected))
+    store.save_attempt_record(make_attempt_record("ATT-3", "ISSUE-2", "run-1", state=AttemptState.retryable))
     store.append_event(make_event(1, "run-1", "run_started"))
     store.append_event(make_event(2, "run-1", "attempt_started"))
     store.append_event(make_event(3, "run-1", "attempt_finished"))
     store.append_event(make_event(4, "run-1", "run_completed"))
+    store.append_alert(make_alert("run-1", "ISSUE-2", AlertSeverity.warning))
+    store.append_alert(make_alert("run-1", "ISSUE-2", AlertSeverity.critical))
 
     report = build_minimal_report(store, "run-1")
 
@@ -124,7 +152,18 @@ def test_build_minimal_report_summarizes_persisted_history(tmp_path: Path) -> No
     assert report.issues_blocked == 1
     assert report.issues_deferred == 0
     assert report.issue_snapshot_count == 2
-    assert report.attempt_count == 2
+    assert report.attempt_count == 3
+    assert report.attempts_by_state == {"accepted": 1, "rejected": 1, "retryable": 1}
+    assert report.engine_usage == {"codex": 3}
+    assert report.retry_distribution.total_retries == 1
+    assert report.retry_distribution.issues_with_retries == 1
+    assert report.retry_distribution.max_retries_on_single_issue == 1
+    assert report.retry_distribution.retry_histogram == {"0": 1, "1": 1, "2+": 0}
+    assert report.alert_count == 2
+    assert report.alerts_by_severity == {"warning": 1, "critical": 1}
+    assert report.delivery_refs == ("https://github.com/GM-HZ/nightshift/pull/1",)
+    assert report.delivery_ids == ("1",)
+    assert report.artifact_dirs == ("/tmp/artifacts",)
     assert report.recent_event_types == ("run_started", "attempt_started", "attempt_finished", "run_completed")
 
 
