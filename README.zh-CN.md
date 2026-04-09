@@ -7,7 +7,7 @@ NightShift 是一个面向夜间运行场景的 AI 编码执行框架。当前�
 ## 当前状态
 
 - 当前实现目标：`v4.2.1`
-- 当前 CLI 命令面：`run-one`、`recover`、`report`、`queue status`、`queue show`、`queue reprioritize`
+- 当前 CLI 命令面：`issue import`、`queue add/status/show/reprioritize`、`run`/`run-one`/`stop`、`recover`、`report`、`logs --issue`、`deliver *`
 - 当前引擎适配器：`codex`、`claude`
 - 当前范围：单 issue 执行流程，以及持久化、验证、恢复、按 run 范围生成报告
 
@@ -55,7 +55,7 @@ NightShift 是一个面向夜间运行场景的 AI 编码执行框架。当前�
 当前 MVP 明确尚未包含的能力：
 
 - requirement splitter
-- PR 分发与合并自动化
+- PR 分发与合并自动化（当前仅接线最小状态流）
 - 通知与仪表盘
 - 超出当前 queue 原语范围之外的无人值守多 issue 夜间调度策略
 
@@ -65,7 +65,7 @@ NightShift 是一个面向夜间运行场景的 AI 编码执行框架。当前�
 
 - `issue import <work-order.md>` 已接线，可从 approved work order 生成/刷新 contract 与 issue record（可选 `--admit`）
 - `run` / `run --daemon` / `stop` 已接线，但仍是最小控制循环，不包含更复杂的无人值守调度策略
-- `deliver branch-ready` / `deliver pr-open` 已接线最小交付状态流；review 同步与 merge 自动化仍未接线
+- `deliver branch-ready` / `deliver pr-open` / `deliver reviewed` / `deliver merged` / `deliver closed-without-merge` 已接线最小交付状态流；仍未包含更丰富的 PR 策略与自动化编排
 - `logs --issue` 已接线为 issue 维度历史聚合视图，但还不是完整仪表盘
 - `retry`、`alerts`、顶层验证命令组等配置段已经建模，但在 MVP 中只做了最小接线
 - 还没有更丰富的晨间报告生成器，目前只有最小 JSON 历史报告

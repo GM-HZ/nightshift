@@ -91,9 +91,12 @@ The current delivery commands are:
 nightshift deliver branch-ready NS-123 --repo /path/to/repo
 nightshift deliver pr-open NS-123 --pr-ref https://github.com/org/repo/pull/123 --pr-id 123 --repo /path/to/repo
 nightshift deliver pr-open NS-123 --auto --repo /path/to/repo --config /path/to/repo/nightshift.yaml
+nightshift deliver reviewed NS-123 --repo /path/to/repo
+nightshift deliver merged NS-123 --repo /path/to/repo
+nightshift deliver closed-without-merge NS-123 --repo /path/to/repo
 ```
 
-That delivery path exists today, but it is still simpler than the final product direction. For example, merge automation and richer PR policy are not part of the current baseline.
+That delivery path exists today, but it is still simpler than the final product direction. For example, richer PR policy and external review-system synchronization are not part of the current baseline.
 
 ## What Is MVP-Shaped Today
 

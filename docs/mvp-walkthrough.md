@@ -54,7 +54,7 @@ This branch intentionally stops short of the full `v4.2.1` product surface. The 
 - no requirement splitter, but approved work-order ingestion is available via `issue import`
 - `queue add` is available for queue admission
 - `run`, `run --daemon`, and `stop` exist as a minimal unattended control loop
-- `deliver branch-ready` and `deliver pr-open` exist as a minimal delivery-state flow; reviewed/merged/closed automation is still missing
+- `deliver branch-ready`, `deliver pr-open`, `deliver reviewed`, `deliver merged`, and `deliver closed-without-merge` exist as a minimal delivery-state flow
 - `logs --issue` exists as a minimal operator history view
 - no rich report generator beyond the current minimal JSON historical report
 - retry budgets, circuit breaker behavior, alert delivery channels, and top-level validation command groups are not yet fully wired into orchestration policy
@@ -112,9 +112,19 @@ python -m nightshift.cli.main queue --help
 
 Current commands:
 
+- `issue import`
+- `queue add`
 - `run-one`
+- `run`
+- `stop`
 - `recover`
 - `report`
+- `logs --issue`
+- `deliver branch-ready`
+- `deliver pr-open`
+- `deliver reviewed`
+- `deliver merged`
+- `deliver closed-without-merge`
 - `queue status`
 - `queue show`
 - `queue reprioritize`

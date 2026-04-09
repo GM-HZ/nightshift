@@ -112,6 +112,25 @@ def _format_queue_add_error(error: Exception) -> str:
     return error.__class__.__name__
 
 
+def _resolve_delivery_pr_link(
+    *,
+    record: object,
+    issue_id: str,
+    action_name: str,
+    pr_ref: str | None,
+    pr_id: str | None,
+) -> tuple[str | None, str | None]:
+    delivery_ref = pr_ref or getattr(record, "delivery_ref", None)
+    delivery_id = pr_id or getattr(record, "delivery_id", None)
+    if not delivery_ref and not delivery_id:
+        typer.echo(
+            f"deliver {action_name} failed for {issue_id}: missing PR link; provide --pr-ref/--pr-id or run deliver pr-open first",
+            err=True,
+        )
+        raise typer.Exit(1)
+    return delivery_ref, delivery_id
+
+
 def _run_queue_once(orchestrator: object, issue_registry: IssueRegistry, state_store: StateStore) -> tuple[int, int, int]:
     success_count = 0
     rejected_count = 0
@@ -414,6 +433,147 @@ def deliver_pr_open(
     )
     typer.echo(
         f"deliver pr-open: {updated.issue_id} delivery_state={updated.delivery_state} "
+        f"delivery_id={updated.delivery_id} delivery_ref={updated.delivery_ref}"
+    )
+
+
+@deliver_app.command("reviewed")
+def deliver_reviewed(
+    issue_id: str,
+    pr_ref: str | None = typer.Option(None, "--pr-ref"),
+    pr_id: str | None = typer.Option(None, "--pr-id"),
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+) -> None:
+    issue_registry = build_issue_registry(repo)
+    record = issue_registry.get_record(issue_id)
+    if record.issue_state != IssueState.done or record.attempt_state != AttemptState.accepted:
+        typer.echo(
+            f"deliver reviewed failed for {issue_id}: issue must be done+accepted before delivery",
+            err=True,
+        )
+        raise typer.Exit(1)
+    if record.delivery_state in {DeliveryState.none, DeliveryState.branch_ready}:
+        typer.echo(
+            f"deliver reviewed failed for {issue_id}: issue must be pr_opened before reviewed",
+            err=True,
+        )
+        raise typer.Exit(1)
+    if record.delivery_state in {DeliveryState.merged, DeliveryState.closed_without_merge}:
+        typer.echo(
+            f"deliver reviewed failed for {issue_id}: issue is already in terminal delivery state {record.delivery_state}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    resolved_ref, resolved_id = _resolve_delivery_pr_link(
+        record=record,
+        issue_id=issue_id,
+        action_name="reviewed",
+        pr_ref=pr_ref,
+        pr_id=pr_id,
+    )
+    updated = issue_registry.attach_delivery(
+        issue_id,
+        DeliveryState.reviewed,
+        delivery_id=resolved_id,
+        delivery_ref=resolved_ref,
+    )
+    typer.echo(
+        f"deliver reviewed: {updated.issue_id} delivery_state={updated.delivery_state} "
+        f"delivery_id={updated.delivery_id} delivery_ref={updated.delivery_ref}"
+    )
+
+
+@deliver_app.command("merged")
+def deliver_merged(
+    issue_id: str,
+    pr_ref: str | None = typer.Option(None, "--pr-ref"),
+    pr_id: str | None = typer.Option(None, "--pr-id"),
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+) -> None:
+    issue_registry = build_issue_registry(repo)
+    record = issue_registry.get_record(issue_id)
+    if record.issue_state != IssueState.done or record.attempt_state != AttemptState.accepted:
+        typer.echo(
+            f"deliver merged failed for {issue_id}: issue must be done+accepted before delivery",
+            err=True,
+        )
+        raise typer.Exit(1)
+    if record.delivery_state in {DeliveryState.none, DeliveryState.branch_ready}:
+        typer.echo(
+            f"deliver merged failed for {issue_id}: issue must be pr_opened/reviewed before merged",
+            err=True,
+        )
+        raise typer.Exit(1)
+    if record.delivery_state == DeliveryState.closed_without_merge:
+        typer.echo(
+            f"deliver merged failed for {issue_id}: issue is already closed_without_merge",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    resolved_ref, resolved_id = _resolve_delivery_pr_link(
+        record=record,
+        issue_id=issue_id,
+        action_name="merged",
+        pr_ref=pr_ref,
+        pr_id=pr_id,
+    )
+    updated = issue_registry.attach_delivery(
+        issue_id,
+        DeliveryState.merged,
+        delivery_id=resolved_id,
+        delivery_ref=resolved_ref,
+    )
+    typer.echo(
+        f"deliver merged: {updated.issue_id} delivery_state={updated.delivery_state} "
+        f"delivery_id={updated.delivery_id} delivery_ref={updated.delivery_ref}"
+    )
+
+
+@deliver_app.command("closed-without-merge")
+def deliver_closed_without_merge(
+    issue_id: str,
+    pr_ref: str | None = typer.Option(None, "--pr-ref"),
+    pr_id: str | None = typer.Option(None, "--pr-id"),
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+) -> None:
+    issue_registry = build_issue_registry(repo)
+    record = issue_registry.get_record(issue_id)
+    if record.issue_state != IssueState.done or record.attempt_state != AttemptState.accepted:
+        typer.echo(
+            f"deliver closed-without-merge failed for {issue_id}: issue must be done+accepted before delivery",
+            err=True,
+        )
+        raise typer.Exit(1)
+    if record.delivery_state in {DeliveryState.none, DeliveryState.branch_ready}:
+        typer.echo(
+            f"deliver closed-without-merge failed for {issue_id}: issue must be pr_opened/reviewed before close",
+            err=True,
+        )
+        raise typer.Exit(1)
+    if record.delivery_state == DeliveryState.merged:
+        typer.echo(
+            f"deliver closed-without-merge failed for {issue_id}: issue is already merged",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    resolved_ref, resolved_id = _resolve_delivery_pr_link(
+        record=record,
+        issue_id=issue_id,
+        action_name="closed-without-merge",
+        pr_ref=pr_ref,
+        pr_id=pr_id,
+    )
+    updated = issue_registry.attach_delivery(
+        issue_id,
+        DeliveryState.closed_without_merge,
+        delivery_id=resolved_id,
+        delivery_ref=resolved_ref,
+    )
+    typer.echo(
+        f"deliver closed-without-merge: {updated.issue_id} delivery_state={updated.delivery_state} "
         f"delivery_id={updated.delivery_id} delivery_ref={updated.delivery_ref}"
     )
 

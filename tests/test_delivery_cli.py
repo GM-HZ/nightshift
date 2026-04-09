@@ -67,6 +67,22 @@ def _execution_contract(issue_id: str) -> IssueContract:
     )
 
 
+def _pr_opened_record(issue_id: str) -> IssueRecord:
+    record = _done_accepted_record(issue_id)
+    return record.model_copy(
+        update={
+            "delivery_state": DeliveryState.pr_opened,
+            "delivery_id": "101",
+            "delivery_ref": "https://github.com/GM-HZ/nightshift/pull/101",
+        }
+    )
+
+
+def _reviewed_record(issue_id: str) -> IssueRecord:
+    record = _pr_opened_record(issue_id)
+    return record.model_copy(update={"delivery_state": DeliveryState.reviewed})
+
+
 def test_deliver_branch_ready_updates_delivery_state(tmp_path: Path) -> None:
     registry = IssueRegistry(tmp_path)
     registry.save_record(_done_accepted_record("ISSUE-1"))
@@ -195,3 +211,88 @@ def test_deliver_pr_open_requires_done_accepted_issue(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "done+accepted" in result.stderr
+
+
+def test_deliver_reviewed_promotes_pr_opened_issue(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    registry.save_record(_pr_opened_record("ISSUE-6"))
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "deliver",
+            "reviewed",
+            "ISSUE-6",
+            "--repo",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "delivery_state=reviewed" in result.stdout
+    updated = registry.get_record("ISSUE-6")
+    assert updated.delivery_state == DeliveryState.reviewed
+    assert updated.delivery_id == "101"
+
+
+def test_deliver_merged_promotes_reviewed_issue(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    registry.save_record(_reviewed_record("ISSUE-7"))
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "deliver",
+            "merged",
+            "ISSUE-7",
+            "--repo",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "delivery_state=merged" in result.stdout
+    updated = registry.get_record("ISSUE-7")
+    assert updated.delivery_state == DeliveryState.merged
+    assert updated.delivery_ref == "https://github.com/GM-HZ/nightshift/pull/101"
+
+
+def test_deliver_closed_without_merge_promotes_pr_opened_issue(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    registry.save_record(_pr_opened_record("ISSUE-8"))
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "deliver",
+            "closed-without-merge",
+            "ISSUE-8",
+            "--repo",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "delivery_state=closed_without_merge" in result.stdout
+    updated = registry.get_record("ISSUE-8")
+    assert updated.delivery_state == DeliveryState.closed_without_merge
+
+
+def test_deliver_reviewed_requires_pr_opened_or_beyond(tmp_path: Path) -> None:
+    registry = IssueRegistry(tmp_path)
+    record = _done_accepted_record("ISSUE-9").model_copy(update={"delivery_state": DeliveryState.branch_ready})
+    registry.save_record(record)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "deliver",
+            "reviewed",
+            "ISSUE-9",
+            "--repo",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "must be pr_opened before reviewed" in result.stderr
