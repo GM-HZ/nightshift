@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 from nightshift.domain import AlertEvent, AttemptRecord, EventRecord, RunState
@@ -51,6 +52,20 @@ class StateStore:
         if payload is None:
             return None
         return payload.get("run_id")
+
+    def request_stop(self) -> None:
+        write_json(self._stop_request_path(), {"requested": True, "requested_at": datetime.now(timezone.utc).isoformat()})
+
+    def clear_stop_request(self) -> None:
+        write_json(self._stop_request_path(), {"requested": False, "requested_at": None})
+
+    def is_stop_requested(self) -> bool:
+        if not self._stop_request_path().exists():
+            return False
+        payload = read_json(self._stop_request_path())
+        if payload is None:
+            return False
+        return bool(payload.get("requested"))
 
     def save_run_issue_snapshot(self, run_id: str, issue_record: IssueRecord) -> None:
         write_model_json(self._issue_snapshot_path(run_id, issue_record.issue_id), issue_record)
@@ -153,3 +168,6 @@ class StateStore:
 
     def _active_run_path(self) -> Path:
         return self.root / "nightshift-data" / "active-run.json"
+
+    def _stop_request_path(self) -> Path:
+        return self.root / "nightshift-data" / "stop-request.json"

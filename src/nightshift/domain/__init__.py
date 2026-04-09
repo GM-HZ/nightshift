@@ -8,7 +8,7 @@ from .contracts import (
     VerificationContract,
     VerificationStageContract,
 )
-from .enums import AttemptState, DeliveryState, IssueKind, IssueState, RunState as RunLifecycleState
+from .enums import AlertSeverity, AttemptState, DeliveryState, IssueKind, IssueState, RunState as RunLifecycleState
 from .records import AlertEvent, AttemptRecord, EventRecord, IssueRecord, RunState
 
 __all__ = [
@@ -16,6 +16,7 @@ __all__ = [
     "AttemptRecord",
     "AttemptState",
     "AttemptLimitsContract",
+    "AlertSeverity",
     "DeliveryState",
     "EnginePreferencesContract",
     "EventRecord",

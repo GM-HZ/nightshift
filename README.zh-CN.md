@@ -63,11 +63,10 @@ NightShift 是一个面向夜间运行场景的 AI 编码执行框架。当前�
 
 当前分支刻意不是一个完整的 `v4.2.1` 产品级实现。下面这些缺口是已知范围，不属于当前 MVP 范围内的 bug：
 
-- 还没有 issue 导入流程：执行前仍需先准备好合约和当前 issue 记录
-- 还没有多 issue 夜间控制循环：目前只有 `run-one`，`run`、`run --daemon`、`stop` 尚未实现
-- 还没有队列接纳命令：`queue add` 仍然缺失
-- 还没有交付自动化：branch 交接、PR 打开、review 同步、merge 工作流尚未接线
-- 还没有操作员日志视图：`logs --issue` 尚未实现
+- `issue import <work-order.md>` 已接线，可从 approved work order 生成/刷新 contract 与 issue record（可选 `--admit`）
+- `run` / `run --daemon` / `stop` 已接线，但仍是最小控制循环，不包含更复杂的无人值守调度策略
+- `deliver branch-ready` / `deliver pr-open` 已接线最小交付状态流；review 同步与 merge 自动化仍未接线
+- `logs --issue` 已接线为 issue 维度历史聚合视图，但还不是完整仪表盘
 - `retry`、`alerts`、顶层验证命令组等配置段已经建模，但在 MVP 中只做了最小接线
 - 还没有更丰富的晨间报告生成器，目前只有最小 JSON 历史报告
 

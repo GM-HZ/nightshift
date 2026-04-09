@@ -51,11 +51,11 @@ Those example files are templates, not an automatically bootstrapped runnable re
 
 This branch intentionally stops short of the full `v4.2.1` product surface. The following items remain outside the current MVP:
 
-- no requirement splitter or approval ingestion flow
-- no `queue add` command
-- no multi-issue overnight scheduler, daemon runner, or stop control loop
-- no delivery automation for branch-ready, PR-opened, reviewed, merged, or closed states
-- no operator log browsing command such as `logs --issue`
+- no requirement splitter, but approved work-order ingestion is available via `issue import`
+- `queue add` is available for queue admission
+- `run`, `run --daemon`, and `stop` exist as a minimal unattended control loop
+- `deliver branch-ready` and `deliver pr-open` exist as a minimal delivery-state flow; reviewed/merged/closed automation is still missing
+- `logs --issue` exists as a minimal operator history view
 - no rich report generator beyond the current minimal JSON historical report
 - retry budgets, circuit breaker behavior, alert delivery channels, and top-level validation command groups are not yet fully wired into orchestration policy
 

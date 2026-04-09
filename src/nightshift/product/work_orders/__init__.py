@@ -12,6 +12,7 @@ from nightshift.product.work_orders.models import (
     WorkOrderTimeouts,
     WorkOrderVerification,
 )
+from nightshift.product.work_orders.importer import WorkOrderImportError, WorkOrderImportResult, import_work_order
 from nightshift.product.work_orders.parser import ParsedWorkOrder, WorkOrderParseError, parse_work_order_markdown
 
 __all__ = [
@@ -21,11 +22,14 @@ __all__ = [
     "WorkOrderEngineHints",
     "WorkOrderExecution",
     "WorkOrderFrontmatter",
+    "WorkOrderImportError",
+    "WorkOrderImportResult",
     "WorkOrderParseError",
     "WorkOrderRationale",
     "WorkOrderSourceIssue",
     "WorkOrderTestEditPolicy",
     "WorkOrderTimeouts",
     "WorkOrderVerification",
+    "import_work_order",
     "parse_work_order_markdown",
 ]
