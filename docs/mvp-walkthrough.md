@@ -34,7 +34,10 @@ For local multi-worktree development guidance, also read:
 
 ## What The MVP Still Assumed
 
-The MVP does not yet include an issue ingestion or approval CLI. Before running the kernel, the target repository must already contain:
+The MVP now includes issue ingestion (`issue import`) and queue admission (`queue add`) CLIs.
+It still does not include a requirement splitter or proposal-approval CLI in this repository.
+
+Before running the kernel directly, the target repository must contain:
 
 - immutable issue contracts under `nightshift/issues/<issue_id>.yaml`
 - current issue records under `nightshift-data/issue-records/<issue_id>.json`
@@ -57,7 +60,7 @@ This branch intentionally stops short of the full `v4.2.1` product surface. The 
 - `deliver branch-ready`, `deliver pr-open`, `deliver reviewed`, `deliver merged`, and `deliver closed-without-merge` exist as a minimal delivery-state flow
 - `logs --issue` exists as a minimal operator history view
 - no rich report generator beyond the current minimal JSON historical report
-- retry budgets, circuit breaker behavior, alert delivery channels, and top-level validation command groups are not yet fully wired into orchestration policy
+- failure circuit breaker behavior and alert delivery channels are not yet fully wired into orchestration policy
 
 Treat these as the next layer above the historical kernel MVP, not as hidden unfinished work inside the implemented slice set.
 
@@ -121,6 +124,7 @@ Current commands:
 - `report`
 - `logs --issue`
 - `alerts`
+- `validation issue`
 - `deliver branch-ready`
 - `deliver pr-open`
 - `deliver reviewed`
@@ -135,6 +139,11 @@ Current commands:
 ### 1. Inspect The Queue
 
 ```bash
+python -m nightshift.cli.main issue import /path/to/work-order.md \
+  --config /path/to/repo/nightshift.yaml \
+  --repo /path/to/repo \
+  --admit
+
 python -m nightshift.cli.main queue status --repo /path/to/repo
 python -m nightshift.cli.main queue show NS-123 --repo /path/to/repo
 python -m nightshift.cli.main queue reprioritize NS-123 high --repo /path/to/repo
@@ -155,7 +164,26 @@ Prerequisites:
 
 - the target repo must be a git repository
 - the configured engine binary must be installed and available on `PATH`
-- the issue contract and issue record must already exist
+- the issue contract and issue record must already exist, either preseeded or created through `issue import`
+
+### 2.5. Inspect Logs And Alerts
+
+```bash
+python -m nightshift.cli.main logs --issue NS-123 --repo /path/to/repo
+python -m nightshift.cli.main alerts --repo /path/to/repo
+python -m nightshift.cli.main alerts --repo /path/to/repo --issue NS-123 --severity warning
+```
+
+The logs and alerts views are persisted-history readers, so they can be used during active execution or after recovery.
+
+### 2.6. Run Contract-Scoped Validation
+
+```bash
+python -m nightshift.cli.main validation issue NS-123 --repo /path/to/repo
+python -m nightshift.cli.main validation issue NS-123 --repo /path/to/repo --workspace /path/to/worktree
+```
+
+By default this command exits non-zero when validation fails, which makes it usable in shell gates and scripts.
 
 ### 3. Recover An Interrupted Run
 

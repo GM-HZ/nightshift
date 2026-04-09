@@ -6,7 +6,7 @@ The current system is usable today, but some steps still have MVP-shaped simplif
 
 ## Current Flow
 
-`requirement -> split -> proposals -> approve/update -> publish -> ingest -> queue add -> run -> deliver`
+`requirement -> split -> proposals -> approve/update -> publish -> ingest -> queue add -> run -> observe -> deliver`
 
 ## Step By Step
 
@@ -80,6 +80,38 @@ nightshift run --repo /path/to/repo --daemon --config /path/to/repo/nightshift.y
 `run-one` still exists as a lower-level kernel-era command, but the product-facing flow should prefer `run`.
 
 This path is implemented today and writes durable run state, attempts, and artifacts.
+It also applies `retry.max_retries` and `retry.retry_policy` when a run-one attempt ends rejected or aborted:
+
+- retry allowed: issue stays `ready` and moves to `attempt_state=retryable`
+- retry not allowed or budget exhausted: issue moves to `deferred`
+
+If `retry.failure_circuit_breaker=true`, the run loop exits early after the first rejected/failed attempt in a round and emits a `critical` alert with `event_type=circuit_breaker_triggered`.
+
+For contract-scoped manual checks without running the full queue loop, use:
+
+```bash
+nightshift validation issue NS-123 --repo /path/to/repo
+nightshift validation issue NS-123 --repo /path/to/repo --workspace /path/to/worktree
+```
+
+### Observe
+
+Operators inspect issue-scoped execution history and alerts before or during delivery decisions.
+
+The current inspection commands are:
+
+```bash
+nightshift logs --issue NS-123 --repo /path/to/repo
+nightshift alerts --repo /path/to/repo
+nightshift alerts --repo /path/to/repo --run RUN-20260328-001 --severity warning
+nightshift alerts --repo /path/to/repo --issue NS-123 --severity critical
+```
+
+`logs --issue` aggregates matching runs, attempts, events, and issue-scoped alerts.
+
+`alerts` supports `--run`, `--issue`, and `--severity` filters so operators can narrow noisy histories to actionable slices.
+
+Current baseline includes automatic `critical` alerts with `event_type=run_aborted` when a run attempt exits through the orchestrator failure path.
 
 ### Deliver
 

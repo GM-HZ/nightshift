@@ -10,10 +10,18 @@ from nightshift.cli.app import app
 from nightshift.domain import AlertSeverity, AttemptState, DeliveryState, IssueState, RunLifecycleState
 from nightshift.domain.records import AlertEvent, AttemptRecord, AttemptValidationResult, EventRecord, IssueRecord, RunState
 from nightshift.orchestrator.run_orchestrator import RunOneResult
+from nightshift.registry.issue_registry import IssueRegistry
 from nightshift.store.state_store import StateStore
 
 
-def _write_config(path: Path, repo_path: Path) -> None:
+def _write_config(
+    path: Path,
+    repo_path: Path,
+    *,
+    max_retries: int = 1,
+    retry_policy: str = "never",
+    failure_circuit_breaker: bool = False,
+) -> None:
     path.write_text(
         f"project:\n  repo_path: {repo_path}\n  main_branch: main\n"
         "runner:\n  default_engine: codex\n  issue_timeout_seconds: 1\n  overnight_timeout_seconds: 60\n"
@@ -33,7 +41,7 @@ def _write_config(path: Path, repo_path: Path) -> None:
         "  default_timeouts:\n"
         "    command_seconds: 1\n"
         "    issue_budget_seconds: 1\n"
-        "retry:\n  max_retries: 1\n  retry_policy: never\n  failure_circuit_breaker: false\n"
+        f"retry:\n  max_retries: {max_retries}\n  retry_policy: {retry_policy}\n  failure_circuit_breaker: {'true' if failure_circuit_breaker else 'false'}\n"
         "workspace:\n  worktree_root: .nightshift/worktrees\n  artifact_root: nightshift-data/runs\n"
         "alerts:\n  enabled_channels: []\n  severity_thresholds:\n    info: info\n    warning: warning\n    critical: critical\n"
         "report:\n  output_directory: nightshift-data/reports\n  summary_verbosity: concise\n"
@@ -187,3 +195,107 @@ def test_alerts_cli_supports_filters(tmp_path: Path) -> None:
     assert payload["filters"]["run_id"] == "RUN-1"
     assert payload["filters"]["severity"] == "warning"
     assert payload["alerts"][0]["alert_id"] == "ALERT-1"
+
+
+def test_run_cli_marks_issue_retryable_when_retry_budget_allows(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    _write_config(config_path, tmp_path, max_retries=1, retry_policy="exponential_backoff")
+    registry = IssueRegistry(tmp_path)
+    registry.save_record(_make_ready_record("ISSUE-RETRY"))
+
+    class FakeOrchestrator:
+        def run_one(self, issue_id: str) -> RunOneResult:
+            assert issue_id == "ISSUE-RETRY"
+            return RunOneResult(issue_id=issue_id, run_id="RUN-1", attempt_id="ATTEMPT-1", accepted=False)
+
+    monkeypatch.setattr("nightshift.cli.app.build_run_orchestrator", lambda repo, config: FakeOrchestrator())
+
+    result = CliRunner().invoke(app, ["run", "--repo", str(tmp_path), "--config", str(config_path)])
+
+    assert result.exit_code == 0
+    updated = registry.get_record("ISSUE-RETRY")
+    assert updated.issue_state == IssueState.ready
+    assert updated.attempt_state == AttemptState.retryable
+    assert updated.retry_count == 1
+    assert "retry scheduled for ISSUE-RETRY" in result.stdout
+
+
+def test_run_cli_defers_issue_when_retry_budget_exhausted(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    _write_config(config_path, tmp_path, max_retries=0, retry_policy="exponential_backoff")
+    registry = IssueRegistry(tmp_path)
+    registry.save_record(_make_ready_record("ISSUE-NORETRY"))
+
+    class FakeOrchestrator:
+        def run_one(self, issue_id: str) -> RunOneResult:
+            assert issue_id == "ISSUE-NORETRY"
+            return RunOneResult(issue_id=issue_id, run_id="RUN-1", attempt_id="ATTEMPT-1", accepted=False)
+
+    monkeypatch.setattr("nightshift.cli.app.build_run_orchestrator", lambda repo, config: FakeOrchestrator())
+
+    result = CliRunner().invoke(app, ["run", "--repo", str(tmp_path), "--config", str(config_path)])
+
+    assert result.exit_code == 0
+    updated = registry.get_record("ISSUE-NORETRY")
+    assert updated.issue_state == IssueState.deferred
+    assert updated.attempt_state == AttemptState.rejected
+    assert updated.deferred_reason == "retry_budget_exhausted"
+    assert "retry skipped for ISSUE-NORETRY" in result.stdout
+
+
+def test_run_cli_triggers_failure_circuit_breaker_and_emits_critical_alert(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    _write_config(
+        config_path,
+        tmp_path,
+        max_retries=1,
+        retry_policy="exponential_backoff",
+        failure_circuit_breaker=True,
+    )
+    registry = IssueRegistry(tmp_path)
+    registry.save_record(_make_ready_record("ISSUE-BREAKER"))
+    state_store = StateStore(tmp_path)
+
+    class FakeOrchestrator:
+        def run_one(self, issue_id: str) -> RunOneResult:
+            assert issue_id == "ISSUE-BREAKER"
+            return RunOneResult(issue_id=issue_id, run_id="RUN-1", attempt_id="ATTEMPT-1", accepted=False)
+
+    monkeypatch.setattr("nightshift.cli.app.build_run_orchestrator", lambda repo, config: FakeOrchestrator())
+
+    result = CliRunner().invoke(app, ["run", "--repo", str(tmp_path), "--config", str(config_path)])
+
+    assert result.exit_code == 0
+    assert "failure circuit breaker triggered; exiting run loop" in result.stdout
+    alerts = state_store.read_alerts(severity=AlertSeverity.critical)
+    assert len(alerts) == 1
+    assert alerts[0].event_type == "circuit_breaker_triggered"
+    assert alerts[0].issue_id == "ISSUE-BREAKER"
+
+
+def test_run_cli_does_not_trigger_circuit_breaker_when_disabled(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "nightshift.yaml"
+    _write_config(
+        config_path,
+        tmp_path,
+        max_retries=1,
+        retry_policy="exponential_backoff",
+        failure_circuit_breaker=False,
+    )
+    registry = IssueRegistry(tmp_path)
+    registry.save_record(_make_ready_record("ISSUE-NOBREAKER"))
+    state_store = StateStore(tmp_path)
+
+    class FakeOrchestrator:
+        def run_one(self, issue_id: str) -> RunOneResult:
+            assert issue_id == "ISSUE-NOBREAKER"
+            return RunOneResult(issue_id=issue_id, run_id="RUN-1", attempt_id="ATTEMPT-1", accepted=False)
+
+    monkeypatch.setattr("nightshift.cli.app.build_run_orchestrator", lambda repo, config: FakeOrchestrator())
+
+    result = CliRunner().invoke(app, ["run", "--repo", str(tmp_path), "--config", str(config_path)])
+
+    assert result.exit_code == 0
+    assert "failure circuit breaker triggered; exiting run loop" not in result.stdout
+    alerts = state_store.read_alerts(severity=AlertSeverity.critical)
+    assert alerts == []

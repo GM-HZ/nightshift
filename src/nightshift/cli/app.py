@@ -2,11 +2,13 @@ from pathlib import Path
 import json
 import time
 from datetime import datetime, timezone
+from uuid import uuid4
 
 import typer
 
 from nightshift.config.loader import load_config
 from nightshift.domain import AlertSeverity, AttemptState, DeliveryState, IssueState
+from nightshift.domain.records import AlertEvent
 from nightshift.engines.codex_adapter import CodexAdapter
 from nightshift.engines.claude_code_adapter import ClaudeCodeAdapter
 from nightshift.engines.registry import EngineRegistry
@@ -25,9 +27,11 @@ app = typer.Typer(help="NightShift kernel CLI.")
 queue_app = typer.Typer(help="Inspect and mutate the current issue queue.")
 issue_app = typer.Typer(help="Import and manage execution issues.")
 deliver_app = typer.Typer(help="Move accepted issues through delivery states.")
+validation_app = typer.Typer(help="Run validation flows against issue contracts.")
 app.add_typer(queue_app, name="queue")
 app.add_typer(issue_app, name="issue")
 app.add_typer(deliver_app, name="deliver")
+app.add_typer(validation_app, name="validation")
 
 
 @app.callback(invoke_without_command=True)
@@ -131,10 +135,141 @@ def _resolve_delivery_pr_link(
     return delivery_ref, delivery_id
 
 
-def _run_queue_once(orchestrator: object, issue_registry: IssueRegistry, state_store: StateStore) -> tuple[int, int, int]:
+def _build_validation_payload(issue_id: str, workspace_path: Path, result: object) -> dict[str, object]:
+    stages = []
+    for stage in getattr(result, "stages", ()):
+        command_results = []
+        for command in getattr(stage, "command_results", ()):
+            command_results.append(
+                {
+                    "command": command.command,
+                    "exit_code": command.exit_code,
+                    "passed": command.passed,
+                    "stdout": command.stdout,
+                    "stderr": command.stderr,
+                }
+            )
+        stages.append(
+            {
+                "stage_name": stage.stage_name,
+                "required": stage.required,
+                "passed": stage.passed,
+                "skipped": stage.skipped,
+                "pass_condition": (
+                    stage.pass_condition.model_dump(mode="json")
+                    if getattr(stage, "pass_condition", None) is not None
+                    else None
+                ),
+                "command_results": command_results,
+            }
+        )
+
+    evaluated_at = getattr(result, "evaluated_at", None)
+    return {
+        "issue_id": issue_id,
+        "workspace_path": str(workspace_path),
+        "passed": getattr(result, "passed"),
+        "failed_stage": getattr(result, "failed_stage"),
+        "summary": getattr(result, "summary"),
+        "evaluated_at": evaluated_at.isoformat() if evaluated_at is not None else None,
+        "raw_artifact_paths": list(getattr(result, "raw_artifact_paths", ()) or ()),
+        "stages": stages,
+    }
+
+
+def _retry_policy_enabled(retry_policy: str | None) -> bool:
+    return (retry_policy or "").strip().lower() != "never"
+
+
+def _append_circuit_breaker_alert(state_store: StateStore, issue_id: str | None, reason: str) -> None:
+    active_run_id = state_store.get_active_run()
+    if active_run_id is not None:
+        run_id = active_run_id
+    else:
+        runs = state_store.list_runs()
+        run_id = runs[-1].run_id if runs else "RUN-CIRCUIT-BREAKER"
+
+    summary = f"failure circuit breaker triggered: {reason}"
+    if issue_id:
+        summary = f"failure circuit breaker triggered for {issue_id}: {reason}"
+
+    state_store.append_alert(
+        AlertEvent(
+            alert_id=f"ALERT-{uuid4().hex[:8]}",
+            run_id=run_id,
+            issue_id=issue_id,
+            severity=AlertSeverity.critical,
+            event_type="circuit_breaker_triggered",
+            summary=summary,
+            details={"reason": reason},
+            created_at=datetime.now(timezone.utc),
+            delivery_status="not_sent",
+        )
+    )
+
+
+def _apply_retry_policy_after_failure(
+    *,
+    issue_registry: object,
+    issue_id: str,
+    failure_state: AttemptState,
+    retry_config: object,
+) -> str | None:
+    get_record = getattr(issue_registry, "get_record", None)
+    save_record = getattr(issue_registry, "save_record", None)
+    if not callable(get_record) or not callable(save_record):
+        return None
+
+    from nightshift.domain.records import IssueRecord
+
+    record = get_record(issue_id)
+    max_retries = int(getattr(retry_config, "max_retries", 0))
+    retry_policy = str(getattr(retry_config, "retry_policy", "never"))
+    retries_used = int(getattr(record, "retry_count", 0))
+    retries_remaining = max(0, max_retries - retries_used)
+    can_retry = _retry_policy_enabled(retry_policy) and retries_remaining > 0
+
+    payload = record.model_dump(mode="json")
+    if can_retry:
+        next_retry_count = retries_used + 1
+        payload.update(
+            {
+                "issue_state": IssueState.ready,
+                "attempt_state": AttemptState.retryable,
+                "retry_count": next_retry_count,
+                "deferred_reason": None,
+                "blocker_type": None,
+                "updated_at": datetime.now(timezone.utc),
+            }
+        )
+        save_record(IssueRecord.model_validate(payload))
+        return f"retry scheduled for {issue_id}: retry_count={next_retry_count}/{max_retries} policy={retry_policy}"
+
+    deferred_reason = "retry_policy_never" if not _retry_policy_enabled(retry_policy) else "retry_budget_exhausted"
+    payload.update(
+        {
+            "issue_state": IssueState.deferred,
+            "attempt_state": failure_state,
+            "deferred_reason": deferred_reason,
+            "blocker_type": None,
+            "updated_at": datetime.now(timezone.utc),
+        }
+    )
+    save_record(IssueRecord.model_validate(payload))
+    return f"retry skipped for {issue_id}: reason={deferred_reason} retries_used={retries_used}/{max_retries}"
+
+
+def _run_queue_once(
+    orchestrator: object,
+    issue_registry: IssueRegistry,
+    state_store: StateStore,
+    retry_config: object,
+) -> tuple[int, int, int, str | None, str | None]:
     success_count = 0
     rejected_count = 0
     failed_count = 0
+    first_rejected_issue: str | None = None
+    first_failed_issue: str | None = None
     for record in issue_registry.list_schedulable_records():
         if state_store.is_stop_requested():
             break
@@ -142,7 +277,17 @@ def _run_queue_once(orchestrator: object, issue_registry: IssueRegistry, state_s
             result = orchestrator.run_one(record.issue_id)
         except Exception as error:
             failed_count += 1
+            if first_failed_issue is None:
+                first_failed_issue = record.issue_id
             typer.echo(f"run failed for {record.issue_id}: {error}", err=True)
+            retry_note = _apply_retry_policy_after_failure(
+                issue_registry=issue_registry,
+                issue_id=record.issue_id,
+                failure_state=AttemptState.aborted,
+                retry_config=retry_config,
+            )
+            if retry_note:
+                typer.echo(retry_note)
             continue
 
         if result.accepted:
@@ -150,8 +295,18 @@ def _run_queue_once(orchestrator: object, issue_registry: IssueRegistry, state_s
             typer.echo(f"{result.issue_id} accepted in {result.run_id} ({result.attempt_id})")
         else:
             rejected_count += 1
+            if first_rejected_issue is None:
+                first_rejected_issue = result.issue_id
             typer.echo(f"{result.issue_id} rejected in {result.run_id} ({result.attempt_id})")
-    return success_count, rejected_count, failed_count
+            retry_note = _apply_retry_policy_after_failure(
+                issue_registry=issue_registry,
+                issue_id=result.issue_id,
+                failure_state=AttemptState.rejected,
+                retry_config=retry_config,
+            )
+            if retry_note:
+                typer.echo(retry_note)
+    return success_count, rejected_count, failed_count, first_rejected_issue, first_failed_issue
 
 
 @app.command("run-one")
@@ -198,10 +353,27 @@ def run(
 
     while True:
         rounds += 1
-        success, rejected, failed = _run_queue_once(orchestrator, issue_registry, state_store)
+        success, rejected, failed, first_rejected_issue, first_failed_issue = _run_queue_once(
+            orchestrator,
+            issue_registry,
+            state_store,
+            loaded_config.retry,
+        )
         accepted_count += success
         rejected_count += rejected
         failed_count += failed
+
+        if loaded_config.retry.failure_circuit_breaker and (failed > 0 or rejected > 0):
+            if failed > 0:
+                trigger_issue = first_failed_issue
+                trigger_reason = "failed attempt"
+            else:
+                trigger_issue = first_rejected_issue
+                trigger_reason = "rejected attempt"
+            _append_circuit_breaker_alert(state_store, trigger_issue, trigger_reason)
+            state_store.request_stop()
+            typer.echo("failure circuit breaker triggered; exiting run loop")
+            break
 
         if state_store.is_stop_requested():
             typer.echo("stop requested; exiting run loop")
@@ -290,6 +462,51 @@ def logs(
         "alerts": [alert.model_dump(mode="json") for alert in state_store.read_alerts(issue_id=issue)],
     }
     typer.echo(json.dumps(payload, indent=2))
+
+
+@validation_app.command("issue")
+def validation_issue(
+    issue_id: str,
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    workspace: Path | None = typer.Option(None, "--workspace", file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    strict: bool = typer.Option(True, "--strict/--no-strict"),
+) -> None:
+    issue_registry = build_issue_registry(repo)
+    try:
+        issue_contract = issue_registry.get_contract(issue_id)
+    except Exception as error:
+        typer.echo(f"validation issue failed for {issue_id}: {error}", err=True)
+        raise typer.Exit(1) from error
+
+    workspace_path = workspace
+    if workspace_path is None:
+        try:
+            record = issue_registry.get_record(issue_id)
+            if record.worktree_path:
+                workspace_path = Path(record.worktree_path)
+        except FileNotFoundError:
+            workspace_path = None
+
+    if workspace_path is None:
+        workspace_path = repo
+
+    from nightshift.domain.records import AttemptRecord
+
+    synthetic_attempt = AttemptRecord.model_validate(
+        {
+            "attempt_id": f"VALIDATE-{issue_id}",
+            "issue_id": issue_id,
+            "run_id": "VALIDATION-CHECK",
+            "engine_name": "validation-only",
+            "engine_invocation_id": "validation-only",
+            "attempt_state": AttemptState.validating,
+        }
+    )
+    result = validation_gate.validate(issue_contract, workspace_path, synthetic_attempt)
+    payload = _build_validation_payload(issue_id, workspace_path, result)
+    typer.echo(json.dumps(payload, indent=2))
+    if strict and not payload["passed"]:
+        raise typer.Exit(1)
 
 
 @app.command("alerts")

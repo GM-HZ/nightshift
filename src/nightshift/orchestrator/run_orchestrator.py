@@ -7,8 +7,8 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from nightshift.context.bundle import ContextBundle
-from nightshift.domain import AttemptState, DeliveryState, IssueState, RunLifecycleState
-from nightshift.domain.records import AttemptRecord, AttemptValidationResult, EventRecord, IssueRecord, RunState
+from nightshift.domain import AlertSeverity, AttemptState, DeliveryState, IssueState, RunLifecycleState
+from nightshift.domain.records import AlertEvent, AttemptRecord, AttemptValidationResult, EventRecord, IssueRecord, RunState
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,7 +229,7 @@ class RunOrchestrator:
             )
             self._append_event(run_id, "run_completed", seq=4, issue_id=issue_id, payload={"accepted": accepted})
             return RunOneResult(issue_id=issue_id, run_id=run_id, attempt_id=attempt_id, accepted=accepted)
-        except Exception:
+        except Exception as error:
             if workspace is not None and snapshot is not None:
                 self.workspace_manager.rollback(workspace, snapshot)
 
@@ -254,6 +254,14 @@ class RunOrchestrator:
                     ended_at=self.now_factory(),
                     issues_attempted=1,
                 )
+            )
+            self._append_alert(
+                run_id=run_id,
+                severity=AlertSeverity.critical,
+                event_type="run_aborted",
+                summary=f"run aborted for {issue_id}: {error}",
+                issue_id=issue_id,
+                details={"attempt_id": attempt_id},
             )
             self._append_event(run_id, "run_failed", seq=3, issue_id=issue_id, attempt_id=attempt_id)
             raise
@@ -309,6 +317,30 @@ class RunOrchestrator:
                 event_type=event_type,
                 payload=payload or {},
                 created_at=self.now_factory(),
+            )
+        )
+
+    def _append_alert(
+        self,
+        *,
+        run_id: str,
+        severity: AlertSeverity,
+        event_type: str,
+        summary: str,
+        issue_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        self.state_store.append_alert(
+            AlertEvent(
+                alert_id=f"ALERT-{uuid4().hex[:8]}",
+                run_id=run_id,
+                issue_id=issue_id,
+                severity=severity,
+                event_type=event_type,
+                summary=summary,
+                details=details or {},
+                created_at=self.now_factory(),
+                delivery_status="not_sent",
             )
         )
 

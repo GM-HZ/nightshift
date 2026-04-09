@@ -7,7 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from nightshift.cli.app import app
-from nightshift.domain import AttemptState, DeliveryState, IssueKind, IssueState, RunLifecycleState
+from nightshift.domain import AlertSeverity, AttemptState, DeliveryState, IssueKind, IssueState, RunLifecycleState
 from nightshift.domain.contracts import (
     AttemptLimitsContract,
     EnginePreferencesContract,
@@ -18,7 +18,7 @@ from nightshift.domain.contracts import (
     VerificationContract,
     VerificationStageContract,
 )
-from nightshift.domain.records import AttemptRecord, EventRecord, IssueRecord, RunState
+from nightshift.domain.records import AlertEvent, AttemptRecord, EventRecord, IssueRecord, RunState
 from nightshift.engines.base import EngineCapabilities, EngineOutcome, PreparedInvocation
 from nightshift.orchestrator.run_orchestrator import RunOneResult, RunOrchestrator
 from nightshift.validation.gate import ValidationResult
@@ -120,6 +120,7 @@ class FakeStateStore:
         self.saved_attempt_records: list[AttemptRecord] = []
         self.saved_snapshots: list[tuple[str, IssueRecord]] = []
         self.events: list[EventRecord] = []
+        self.alerts: list[AlertEvent] = []
         self.active_runs: list[str | None] = []
 
     def save_run_state(self, run_state: RunState) -> None:
@@ -138,6 +139,9 @@ class FakeStateStore:
         if self.raise_on_event_type == event_record.event_type:
             raise RuntimeError(f"event write failed for {event_record.event_type}")
         self.events.append(event_record)
+
+    def append_alert(self, alert_event: AlertEvent) -> None:
+        self.alerts.append(alert_event)
 
 
 class FakeWorkspaceManager:
@@ -355,6 +359,8 @@ def test_run_orchestrator_clears_active_run_and_aborts_issue_on_engine_exception
     assert issue_registry.record.issue_state == IssueState.ready
     assert issue_registry.record.attempt_state == AttemptState.aborted
     assert state_store.saved_snapshots[-1][1].issue_state == IssueState.ready
+    assert state_store.alerts[-1].event_type == "run_aborted"
+    assert state_store.alerts[-1].severity == AlertSeverity.critical
     assert state_store.events[-1].event_type == "run_failed"
 
 
@@ -419,6 +425,8 @@ def test_run_orchestrator_aborts_when_engine_returns_non_success_outcome() -> No
     assert issue_registry.record.attempt_state == AttemptState.aborted
     assert state_store.saved_run_states[-1].run_state == RunLifecycleState.aborted
     assert state_store.saved_attempt_records[-1].attempt_state == AttemptState.aborted
+    assert state_store.alerts[-1].event_type == "run_aborted"
+    assert state_store.alerts[-1].severity == AlertSeverity.critical
 
 
 def test_run_orchestrator_does_not_auto_switch_to_fallback_adapter() -> None:

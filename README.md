@@ -13,11 +13,13 @@ NightShift is an overnight AI coding system for turning a requirement into a rev
 
 ## What Works Today
 
-- requirement splitting and proposal review
-- GitHub issue ingestion into execution-ready contracts and records
-- queue admission and queue inspection
-- single-issue execution, recovery, and reporting
-- delivery flow through to pull request creation in the current product chain
+- requirement splitting and proposal review in the current MVP operator loop
+- approved work-order ingestion via `issue import` into execution-ready contracts and records
+- queue admission and inspection via `queue add/status/show/reprioritize`
+- run control via `run`/`run --daemon`/`stop`, plus `recover` for interrupted runs
+- contract-scoped validation checks via `validation issue`
+- operator visibility via `logs --issue`, `alerts` filters, and minimal `report`
+- delivery flow via `deliver *` commands through pull request state progression
 
 ## Quickstart Path
 
