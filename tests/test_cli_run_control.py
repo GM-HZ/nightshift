@@ -147,3 +147,43 @@ def test_logs_cli_returns_issue_scoped_history(tmp_path: Path) -> None:
     assert payload["runs"][0]["run_id"] == "RUN-1"
     assert payload["runs"][0]["attempts"][0]["attempt_id"] == "ATTEMPT-1"
     assert payload["alerts"][0]["alert_id"] == "ALERT-1"
+
+
+def test_alerts_cli_supports_filters(tmp_path: Path) -> None:
+    state_store = StateStore(tmp_path)
+    state_store.append_alert(
+        AlertEvent(
+            alert_id="ALERT-1",
+            run_id="RUN-1",
+            issue_id="ISSUE-1",
+            severity=AlertSeverity.warning,
+            event_type="issue_blocked",
+            summary="issue blocked",
+            delivery_status="not_sent",
+            created_at=datetime(2026, 4, 9, tzinfo=timezone.utc),
+        )
+    )
+    state_store.append_alert(
+        AlertEvent(
+            alert_id="ALERT-2",
+            run_id="RUN-2",
+            issue_id="ISSUE-2",
+            severity=AlertSeverity.critical,
+            event_type="run_aborted",
+            summary="run aborted",
+            delivery_status="not_sent",
+            created_at=datetime(2026, 4, 9, tzinfo=timezone.utc),
+        )
+    )
+
+    result = CliRunner().invoke(
+        app,
+        ["alerts", "--repo", str(tmp_path), "--run", "RUN-1", "--severity", "warning"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["count"] == 1
+    assert payload["filters"]["run_id"] == "RUN-1"
+    assert payload["filters"]["severity"] == "warning"
+    assert payload["alerts"][0]["alert_id"] == "ALERT-1"

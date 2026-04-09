@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import typer
 
 from nightshift.config.loader import load_config
-from nightshift.domain import AttemptState, DeliveryState, IssueState
+from nightshift.domain import AlertSeverity, AttemptState, DeliveryState, IssueState
 from nightshift.engines.codex_adapter import CodexAdapter
 from nightshift.engines.claude_code_adapter import ClaudeCodeAdapter
 from nightshift.engines.registry import EngineRegistry
@@ -288,6 +288,31 @@ def logs(
         "issue_id": issue,
         "runs": matching_runs,
         "alerts": [alert.model_dump(mode="json") for alert in state_store.read_alerts(issue_id=issue)],
+    }
+    typer.echo(json.dumps(payload, indent=2))
+
+
+@app.command("alerts")
+def alerts(
+    repo: Path = typer.Option(..., "--repo", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True),
+    run: str | None = typer.Option(None, "--run"),
+    issue: str | None = typer.Option(None, "--issue"),
+    severity: AlertSeverity | None = typer.Option(None, "--severity"),
+) -> None:
+    state_store = StateStore(repo)
+    alert_events = state_store.read_alerts(
+        run_id=run,
+        issue_id=issue,
+        severity=severity,
+    )
+    payload = {
+        "filters": {
+            "run_id": run,
+            "issue_id": issue,
+            "severity": severity.value if severity is not None else None,
+        },
+        "count": len(alert_events),
+        "alerts": [alert.model_dump(mode="json") for alert in alert_events],
     }
     typer.echo(json.dumps(payload, indent=2))
 

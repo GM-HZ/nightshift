@@ -120,6 +120,7 @@ Current commands:
 - `recover`
 - `report`
 - `logs --issue`
+- `alerts`
 - `deliver branch-ready`
 - `deliver pr-open`
 - `deliver reviewed`

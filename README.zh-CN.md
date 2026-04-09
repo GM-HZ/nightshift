@@ -7,7 +7,7 @@ NightShift 是一个面向夜间运行场景的 AI 编码执行框架。当前�
 ## 当前状态
 
 - 当前实现目标：`v4.2.1`
-- 当前 CLI 命令面：`issue import`、`queue add/status/show/reprioritize`、`run`/`run-one`/`stop`、`recover`、`report`、`logs --issue`、`deliver *`
+- 当前 CLI 命令面：`issue import`、`queue add/status/show/reprioritize`、`run`/`run-one`/`stop`、`recover`、`report`、`logs --issue`、`alerts`、`deliver *`
 - 当前引擎适配器：`codex`、`claude`
 - 当前范围：单 issue 执行流程，以及持久化、验证、恢复、按 run 范围生成报告
 
